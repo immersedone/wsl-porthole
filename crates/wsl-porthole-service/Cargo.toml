@@ -1,0 +1,16 @@
+[package]
+name    = "wsl-porthole-service"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "wsl-porthole-service"
+path = "src/main.rs"
+
+[dependencies]
+wsl-porthole-core       = { path = "../wsl-porthole-core" }
+windows-service    = "0.7"
+tokio              = { version = "1", features = ["full"] }
+anyhow             = "1"
+tracing            = "0.1"
+tracing-subscriber = "0.3"

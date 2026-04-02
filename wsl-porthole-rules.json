@@ -1,0 +1,155 @@
+{
+  "_comment": "Conduit rule config — import this when the app is ready",
+  "version": 1,
+  "distro": "auto",
+  "rules": [
+    {
+      "name": "HTTP",
+      "direction": "WIN_TO_WSL",
+      "listenAddress": "0.0.0.0",
+      "listenPort": 80,
+      "connectPort": 80,
+      "connectAddress": "${WSL_IP}",
+      "lan": true,
+      "enabled": true,
+      "source": "manual"
+    },
+    {
+      "name": "HTTP alt",
+      "direction": "WIN_TO_WSL",
+      "listenAddress": "0.0.0.0",
+      "listenPort": 8080,
+      "connectPort": 80,
+      "connectAddress": "${WSL_IP}",
+      "lan": true,
+      "enabled": true,
+      "source": "manual",
+      "note": "remapped: listen 8080 → connect 80"
+    },
+    {
+      "name": "HTTPS",
+      "direction": "WIN_TO_WSL",
+      "listenAddress": "0.0.0.0",
+      "listenPort": 443,
+      "connectPort": 443,
+      "connectAddress": "${WSL_IP}",
+      "lan": true,
+      "enabled": true,
+      "source": "manual"
+    },
+    {
+      "name": "HTTPS alt",
+      "direction": "WIN_TO_WSL",
+      "listenAddress": "0.0.0.0",
+      "listenPort": 4433,
+      "connectPort": 443,
+      "connectAddress": "${WSL_IP}",
+      "lan": true,
+      "enabled": true,
+      "source": "manual",
+      "note": "remapped: listen 4433 → connect 443"
+    },
+    {
+      "name": "SSH",
+      "direction": "WIN_TO_WSL",
+      "listenAddress": "0.0.0.0",
+      "listenPort": 22,
+      "connectPort": 22,
+      "connectAddress": "${WSL_IP}",
+      "lan": true,
+      "enabled": true,
+      "source": "manual"
+    },
+    {
+      "name": "SSH alt",
+      "direction": "WIN_TO_WSL",
+      "listenAddress": "0.0.0.0",
+      "listenPort": 28,
+      "connectPort": 22,
+      "connectAddress": "${WSL_IP}",
+      "lan": true,
+      "enabled": true,
+      "source": "manual",
+      "note": "remapped: listen 28 → connect 22"
+    },
+    {
+      "name": "FTP alt",
+      "direction": "WIN_TO_WSL",
+      "listenAddress": "0.0.0.0",
+      "listenPort": 218,
+      "connectPort": 21,
+      "connectAddress": "${WSL_IP}",
+      "lan": true,
+      "enabled": true,
+      "source": "manual",
+      "note": "remapped: listen 218 → connect 21"
+    },
+    {
+      "name": "App range",
+      "direction": "WIN_TO_WSL",
+      "listenAddress": "0.0.0.0",
+      "listenPortRange": [1024, 1048],
+      "connectPortRange": [1024, 1048],
+      "connectAddress": "${WSL_IP}",
+      "lan": true,
+      "enabled": true,
+      "source": "manual",
+      "note": "collapsed from 25 individual rules"
+    },
+    {
+      "name": "App server 8100",
+      "direction": "WIN_TO_WSL",
+      "listenAddress": "0.0.0.0",
+      "listenPort": 8100,
+      "connectPort": 8100,
+      "connectAddress": "${WSL_IP}",
+      "lan": true,
+      "enabled": true,
+      "source": "manual"
+    },
+    {
+      "name": "App server 6001",
+      "direction": "WIN_TO_WSL",
+      "listenAddress": "0.0.0.0",
+      "listenPort": 6001,
+      "connectPort": 6001,
+      "connectAddress": "${WSL_IP}",
+      "lan": true,
+      "enabled": true,
+      "source": "manual"
+    },
+    {
+      "name": "Meilisearch 7700",
+      "direction": "WIN_TO_WSL",
+      "listenAddress": "0.0.0.0",
+      "listenPort": 7700,
+      "connectPort": 7700,
+      "connectAddress": "${WSL_IP}",
+      "lan": true,
+      "enabled": true,
+      "source": "manual"
+    },
+    {
+      "name": "Dev server 3002",
+      "direction": "WIN_TO_WSL",
+      "listenAddress": "0.0.0.0",
+      "listenPort": 3002,
+      "connectPort": 3002,
+      "connectAddress": "${WSL_IP}",
+      "lan": true,
+      "enabled": true,
+      "source": "manual"
+    },
+    {
+      "name": "Vite dev 5173",
+      "direction": "WIN_TO_WSL",
+      "listenAddress": "0.0.0.0",
+      "listenPort": 5173,
+      "connectPort": 5173,
+      "connectAddress": "${WSL_IP}",
+      "lan": true,
+      "enabled": true,
+      "source": "manual"
+    }
+  ]
+}

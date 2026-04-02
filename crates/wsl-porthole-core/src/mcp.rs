@@ -1,0 +1,1 @@
+//! mcp — stub, implement next.
