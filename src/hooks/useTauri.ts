@@ -75,3 +75,6 @@ export const getFirewallRules = () => invoke<string[]>("get_firewall_rules");
 export const installService = () => invoke<string>("install_service");
 export const uninstallService = () => invoke<string>("uninstall_service");
 export const getServiceStatus = () => invoke<string>("get_service_status");
+
+// Updates
+export const checkForAppUpdates = () => invoke<string | null>("check_for_app_updates");

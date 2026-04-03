@@ -372,3 +372,17 @@ pub fn get_service_status() -> Result<String, String> {
         Ok("not_installed".into())
     }
 }
+
+// ---------- Updater ----------
+
+use tauri_plugin_updater::UpdaterExt;
+
+#[tauri::command]
+pub async fn check_for_app_updates(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let updater = app.updater().map_err(|e| format!("Updater not available: {e}"))?;
+    match updater.check().await {
+        Ok(Some(update)) => Ok(Some(update.version)),
+        Ok(None) => Ok(None),
+        Err(e) => Err(format!("Update check failed: {e}")),
+    }
+}
