@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { RefreshCw, Globe, Wifi } from "lucide-vue-next";
+import { RefreshCw, Globe, Wifi, Clock } from "lucide-vue-next";
 import type { StatusInfo } from "../types";
 
 defineProps<{ status: StatusInfo | null }>();
 const emit = defineEmits<{ sync: [] }>();
 
 const syncing = ref(false);
+const lastSync = ref<string | null>(null);
 
 async function handleSync() {
   syncing.value = true;
@@ -15,6 +16,7 @@ async function handleSync() {
       const { syncNow } = await import("../hooks/useTauri");
       await syncNow();
     }
+    lastSync.value = new Date().toLocaleTimeString();
     emit("sync");
   } finally {
     setTimeout(() => (syncing.value = false), 500);
@@ -58,6 +60,13 @@ function copy(text: string) {
         :style="{ color: 'var(--accent)' }" title="Click to copy">{{ status.host_ip }}</button>
       <span v-else :style="{ color: 'var(--accent)' }">—</span>
     </div>
+    <template v-if="lastSync">
+      <span :style="{ color: 'var(--border)' }">|</span>
+      <div class="flex items-center gap-1">
+        <Clock :size="11" />
+        <span>{{ lastSync }}</span>
+      </div>
+    </template>
     <div class="flex-1" />
     <button @click="handleSync" class="flex items-center gap-1 px-2 py-0.5 rounded transition-colors"
       :style="{ color: 'var(--accent)', background: syncing ? 'var(--accent-dim)' : 'transparent' }" title="Re-sync all rules now">

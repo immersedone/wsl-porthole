@@ -51,6 +51,23 @@ export const listDockerContainers = () =>
 export const detectMcpServers = () =>
   invoke<McpServerInfo[]>("detect_mcp_servers");
 
+// Health checks
+export const checkHealth = () =>
+  invoke<{ ruleId: string; status: string; reachable: number; total: number; failedPorts: number[] }[]>("check_health");
+
+// Conflict detection
+export const detectConflicts = () =>
+  invoke<{ ruleId: string; ruleName: string; port: number; owningPid: number; owningProcess: string }[]>("detect_conflicts");
+
+// Export
+export const exportNetshScript = () => invoke<string>("export_netsh_script");
+
+// Inject
+export const writeHostsEntry = (hostname: string, ip: string) =>
+  invoke<void>("write_hosts_entry", { hostname, ip });
+export const injectEnvVar = (name: string, value: string) =>
+  invoke<void>("inject_env_var", { name, value });
+
 // Firewall
 export const getFirewallRules = () => invoke<string[]>("get_firewall_rules");
 

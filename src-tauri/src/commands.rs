@@ -286,6 +286,42 @@ pub async fn detect_mcp_servers() -> Result<Vec<McpServerInfo>, String> {
         .collect())
 }
 
+// ---------- Health checks ----------
+
+#[tauri::command]
+pub async fn check_health() -> Result<Vec<wsl_porthole_core::health::HealthResult>, String> {
+    let cfg = config::load_rules(&config_path()).map_err(|e| e.to_string())?;
+    Ok(wsl_porthole_core::health::check_all_async(&cfg.rules).await)
+}
+
+// ---------- Conflict detection ----------
+
+#[tauri::command]
+pub fn detect_conflicts() -> Result<Vec<wsl_porthole_core::conflict::Conflict>, String> {
+    let cfg = config::load_rules(&config_path()).map_err(|e| e.to_string())?;
+    wsl_porthole_core::conflict::detect_conflicts(&cfg.rules).map_err(|e| e.to_string())
+}
+
+// ---------- Export ----------
+
+#[tauri::command]
+pub fn export_netsh_script() -> Result<String, String> {
+    let cfg = config::load_rules(&config_path()).map_err(|e| e.to_string())?;
+    Ok(wsl_porthole_core::export::export_netsh_script(&cfg.rules))
+}
+
+// ---------- Inject ----------
+
+#[tauri::command]
+pub fn write_hosts_entry(hostname: String, ip: String) -> Result<(), String> {
+    wsl_porthole_core::inject::write_hosts_entry(&hostname, &ip, None).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn inject_env_var(name: String, value: String) -> Result<(), String> {
+    wsl_porthole_core::inject::inject_env_var(&name, &value, None).map_err(|e| e.to_string())
+}
+
 // ---------- Firewall ----------
 
 #[tauri::command]

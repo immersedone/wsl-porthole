@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, inject, type Ref } from "vue";
-import { Plus, Upload, Download } from "lucide-vue-next";
+import { Plus, Upload, Download, FileText } from "lucide-vue-next";
 import RuleCard from "../components/RuleCard.vue";
 import RuleEditor from "../components/RuleEditor.vue";
 import FilterBar, { type FilterState } from "../components/FilterBar.vue";
@@ -68,6 +68,17 @@ function handleExport() {
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([json], { type: "application/json" })); a.download = "wsl-porthole-rules.json"; a.click();
   log("rule.export", "Exported rules as JSON");
 }
+async function handleExportPs1() {
+  let script: string;
+  if ("__TAURI__" in window) {
+    const { exportNetshScript } = await import("../hooks/useTauri");
+    script = await exportNetshScript();
+  } else {
+    script = "# WSL PortHole — demo export\n# Run as Administrator\nnetsh interface portproxy reset\n";
+  }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([script], { type: "text/plain" })); a.download = "wsl-porthole-rules.ps1"; a.click();
+  log("rule.export", "Exported rules as .ps1 script");
+}
 </script>
 
 <template>
@@ -78,7 +89,8 @@ function handleExport() {
       </h2>
       <div class="flex items-center gap-2">
         <button @click="showImport = true" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg" :style="{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }"><Upload :size="12" /> Import</button>
-        <button @click="handleExport" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg" :style="{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }"><Download :size="12" /> Export</button>
+        <button @click="handleExport" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg" :style="{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }"><Download :size="12" /> JSON</button>
+        <button @click="handleExportPs1" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg" :style="{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }"><FileText :size="12" /> .ps1</button>
         <button @click="editorRule = undefined; showEditor = true" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium" :style="{ background: 'var(--accent)', color: 'var(--bg-primary)' }"><Plus :size="12" /> Add Rule</button>
       </div>
     </div>
