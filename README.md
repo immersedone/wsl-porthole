@@ -2,7 +2,7 @@
 
 > Auto-managing WSL2 ↔ Windows port forwarding. Install once, forget forever.
 
-WSL PortHole is a Windows desktop app + background service that permanently solves the WSL2 port-forwarding problem. WSL2 gets a new IP every restart, breaking all your `netsh portproxy` rules. WSL PortHole detects the change and re-applies everything automatically — no scripts, no manual steps.
+WSL PortHole is a Windows desktop app + background service that manages port forwarding and firewall rules across Windows, WSL2, and Docker. It keeps `netsh portproxy` rules, firewall entries, and container routing in sync — detecting WSL IP changes, discovering Docker services, and routing MCP servers between layers automatically.
 
 ![Tauri v2](https://img.shields.io/badge/Tauri-v2-blue)
 ![Rust](https://img.shields.io/badge/Rust-1.94-orange)
