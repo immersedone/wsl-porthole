@@ -5,6 +5,7 @@ import type { ContainerSummary, Rule } from "../types";
 import { useAuditLog } from "../hooks/useAuditLog";
 
 const rules = inject<Ref<Rule[]>>("rules")!;
+const refreshRules = inject<() => void>("refreshRules")!;
 const { log } = useAuditLog();
 const containers = ref<ContainerSummary[]>([]);
 const loading = ref(false);
@@ -34,10 +35,18 @@ const grouped = computed(() => {
   return m;
 });
 
-function addPort(c: ContainerSummary, p: ContainerSummary["ports"][0]) {
+async function addPort(c: ContainerSummary, p: ContainerSummary["ports"][0]) {
   if (rules.value.some((r) => r.listenPort.type === "single" && r.listenPort.port === p.host_port)) return;
-  rules.value.push({ id: crypto.randomUUID(), name: `${c.name}:${p.container_port}`, direction: "winToWsl", listenAddr: "0.0.0.0", listenPort: { type: "single", port: p.host_port }, connectPort: { type: "single", port: p.container_port }, connectAddr: "${WSL_IP}", distro: null, lan: true, enabled: true, source: "docker", note: `From ${c.image}` });
-  log("docker.add_rule", `Added rule for ${c.name}:${p.container_port}`);
+  try {
+    if ("__TAURI__" in window) {
+      const { addRule } = await import("../hooks/useTauri");
+      await addRule({ name: `${c.name}:${p.container_port}`, direction: "WinToWsl", listenAddr: "0.0.0.0", listenPort: p.host_port, connectPort: p.container_port, connectAddr: "${WSL_IP}", lan: true });
+      refreshRules();
+    } else {
+      rules.value.push({ id: crypto.randomUUID(), name: `${c.name}:${p.container_port}`, direction: "winToWsl", listenAddr: "0.0.0.0", listenPort: { type: "single", port: p.host_port }, connectPort: { type: "single", port: p.container_port }, connectAddr: "${WSL_IP}", distro: null, lan: true, enabled: true, source: "docker", note: `From ${c.image}`, health: "unknown" });
+    }
+    log("docker.add_rule", `Added rule for ${c.name}:${p.container_port}`);
+  } catch (e) { log("docker.add_rule", `Failed: ${e}`, "error"); }
 }
 function hasRule(port: number) { return rules.value.some((r) => r.listenPort.type === "single" && r.listenPort.port === port); }
 </script>

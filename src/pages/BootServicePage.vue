@@ -13,12 +13,33 @@ async function refresh() {
 onMounted(refresh);
 
 async function install() {
-  if ("__TAURI__" in window) { const { installService } = await import("../hooks/useTauri"); await installService(); }
-  log("service.install", "Installed service"); refresh();
+  try {
+    if ("__TAURI__" in window) { const { installService } = await import("../hooks/useTauri"); await installService(); }
+    log("service.install", "Installed service");
+  } catch (e) { log("service.install", `Failed: ${e}`, "error"); }
+  refresh();
 }
 async function uninstall() {
-  if ("__TAURI__" in window) { const { uninstallService } = await import("../hooks/useTauri"); await uninstallService(); }
-  log("service.uninstall", "Uninstalled service"); refresh();
+  try {
+    if ("__TAURI__" in window) { const { uninstallService } = await import("../hooks/useTauri"); await uninstallService(); }
+    log("service.uninstall", "Uninstalled service");
+  } catch (e) { log("service.uninstall", `Failed: ${e}`, "error"); }
+  refresh();
+}
+async function toggleService() {
+  const action = svcStatus.value === "running" ? "stop" : "start";
+  try {
+    if ("__TAURI__" in window) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      // Use sc.exe via shell — service start/stop requires admin
+      await invoke("plugin:shell|execute", { program: "sc", args: [action, "WslPortHole"] });
+    }
+    log(`service.${action}`, `${action === "start" ? "Started" : "Stopped"} service`);
+  } catch (e) {
+    log(`service.${action}`, `Failed: ${e}`, "error");
+  }
+  // Wait briefly for the state to change, then refresh
+  setTimeout(refresh, 1500);
 }
 
 const statusColor = (s: string) => s === "running" ? "var(--status-ok)" : s === "stopped" ? "var(--status-warn)" : "var(--text-secondary)";
@@ -39,7 +60,7 @@ const statusColor = (s: string) => s === "running" ? "var(--status-ok)" : s === 
       <div class="grid grid-cols-2 gap-3">
         <button v-if="svcStatus === 'not_installed'" @click="install" class="flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium col-span-2" :style="{ background: 'var(--accent)', color: 'var(--bg-primary)' }"><Download :size="14" /> Install Service</button>
         <template v-else>
-          <button class="flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm" :style="{ border: '1px solid var(--border)', color: 'var(--text-primary)' }">
+          <button @click="toggleService" class="flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm" :style="{ border: '1px solid var(--border)', color: 'var(--text-primary)' }">
             <template v-if="svcStatus === 'running'"><Square :size="14" /> Stop</template>
             <template v-else><Play :size="14" /> Start</template>
           </button>

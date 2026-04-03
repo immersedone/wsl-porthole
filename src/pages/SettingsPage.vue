@@ -1,5 +1,33 @@
 <script setup lang="ts">
+import { ref, onMounted } from "vue";
 import { Info } from "lucide-vue-next";
+
+const appVersion = ref("...");
+
+const startMinimized = ref(false);
+const minimizeToTray = ref(true);
+const healthCheckInterval = ref(60);
+const ipSettleDelay = ref(5);
+const pollingInterval = ref(30);
+const defaultListenAddr = ref("0.0.0.0");
+const toastOnIpChange = ref(true);
+const toastOnConflict = ref(true);
+
+onMounted(async () => {
+  if ("__TAURI__" in window) {
+    try {
+      const { getVersion } = await import("@tauri-apps/api/app");
+      appVersion.value = await getVersion();
+    } catch {
+      appVersion.value = __APP_VERSION__;
+    }
+  } else {
+    appVersion.value = __APP_VERSION__;
+  }
+});
+
+// Injected by Vite define
+declare const __APP_VERSION__: string;
 </script>
 
 <template>
@@ -12,15 +40,15 @@ import { Info } from "lucide-vue-next";
         <div :style="{ background: 'var(--bg-secondary)' }">
           <div class="flex items-center justify-between px-4 py-3" :style="{ borderBottom: '1px solid var(--border)' }">
             <div><div class="text-sm" :style="{ color: 'var(--text-primary)' }">Start minimized to tray</div><div class="text-xs" :style="{ color: 'var(--text-secondary)' }">Launch in the system tray</div></div>
-            <input type="checkbox" class="accent-[var(--accent)]" />
+            <input type="checkbox" v-model="startMinimized" class="accent-[var(--accent)]" />
           </div>
           <div class="flex items-center justify-between px-4 py-3" :style="{ borderBottom: '1px solid var(--border)' }">
             <div><div class="text-sm" :style="{ color: 'var(--text-primary)' }">Minimize to tray on close</div><div class="text-xs" :style="{ color: 'var(--text-secondary)' }">Keep running in background</div></div>
-            <input type="checkbox" checked class="accent-[var(--accent)]" />
+            <input type="checkbox" v-model="minimizeToTray" class="accent-[var(--accent)]" />
           </div>
           <div class="flex items-center justify-between px-4 py-3">
             <div><div class="text-sm" :style="{ color: 'var(--text-primary)' }">Health check interval</div><div class="text-xs" :style="{ color: 'var(--text-secondary)' }">Seconds between TCP health checks</div></div>
-            <input type="number" value="60" class="w-20 text-sm px-2 py-1 rounded text-right" :style="{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }" />
+            <input type="number" v-model.number="healthCheckInterval" class="w-20 text-sm px-2 py-1 rounded text-right" :style="{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }" />
           </div>
         </div>
       </div>
@@ -31,17 +59,32 @@ import { Info } from "lucide-vue-next";
         <div :style="{ background: 'var(--bg-secondary)' }">
           <div class="flex items-center justify-between px-4 py-3" :style="{ borderBottom: '1px solid var(--border)' }">
             <div><div class="text-sm" :style="{ color: 'var(--text-primary)' }">IP settle delay</div><div class="text-xs" :style="{ color: 'var(--text-secondary)' }">Seconds to wait after WSL IP change</div></div>
-            <input type="number" value="5" class="w-20 text-sm px-2 py-1 rounded text-right" :style="{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }" />
+            <input type="number" v-model.number="ipSettleDelay" class="w-20 text-sm px-2 py-1 rounded text-right" :style="{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }" />
           </div>
           <div class="flex items-center justify-between px-4 py-3" :style="{ borderBottom: '1px solid var(--border)' }">
             <div><div class="text-sm" :style="{ color: 'var(--text-primary)' }">Polling interval</div><div class="text-xs" :style="{ color: 'var(--text-secondary)' }">Fallback polling in seconds</div></div>
-            <input type="number" value="30" class="w-20 text-sm px-2 py-1 rounded text-right" :style="{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }" />
+            <input type="number" v-model.number="pollingInterval" class="w-20 text-sm px-2 py-1 rounded text-right" :style="{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }" />
           </div>
           <div class="flex items-center justify-between px-4 py-3">
             <div><div class="text-sm" :style="{ color: 'var(--text-primary)' }">Default listen address</div><div class="text-xs" :style="{ color: 'var(--text-secondary)' }">Default bind address for new rules</div></div>
-            <select class="text-sm px-2 py-1 rounded" :style="{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }">
+            <select v-model="defaultListenAddr" class="text-sm px-2 py-1 rounded" :style="{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }">
               <option value="0.0.0.0">0.0.0.0 (LAN)</option><option value="127.0.0.1">127.0.0.1 (local)</option>
             </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Notifications -->
+      <div class="rounded-lg overflow-hidden" :style="{ border: '1px solid var(--border)' }">
+        <div class="px-4 py-2 text-xs font-semibold uppercase tracking-wider" :style="{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }">Notifications</div>
+        <div :style="{ background: 'var(--bg-secondary)' }">
+          <div class="flex items-center justify-between px-4 py-3" :style="{ borderBottom: '1px solid var(--border)' }">
+            <div><div class="text-sm" :style="{ color: 'var(--text-primary)' }">Toast on IP change</div><div class="text-xs" :style="{ color: 'var(--text-secondary)' }">Show notification when WSL IP changes</div></div>
+            <input type="checkbox" v-model="toastOnIpChange" class="accent-[var(--accent)]" />
+          </div>
+          <div class="flex items-center justify-between px-4 py-3">
+            <div><div class="text-sm" :style="{ color: 'var(--text-primary)' }">Toast on conflict</div><div class="text-xs" :style="{ color: 'var(--text-secondary)' }">Notify when a port conflict is detected</div></div>
+            <input type="checkbox" v-model="toastOnConflict" class="accent-[var(--accent)]" />
           </div>
         </div>
       </div>
@@ -50,8 +93,8 @@ import { Info } from "lucide-vue-next";
       <div class="rounded-lg p-4" :style="{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }">
         <div class="flex items-center gap-2 mb-2"><Info :size="14" :style="{ color: 'var(--accent)' }" /><h3 class="text-sm font-semibold" :style="{ color: 'var(--text-primary)' }">About</h3></div>
         <div class="text-xs space-y-1" :style="{ color: 'var(--text-secondary)' }">
-          <p><strong>WSL PortHole</strong> v0.1.0</p>
-          <p>Manages netsh portproxy rules between Windows, WSL2, and Docker.</p>
+          <p><strong>WSL PortHole</strong> v{{ appVersion }}</p>
+          <p>Manages port forwarding and firewall rules across Windows, WSL2, and Docker.</p>
           <p>Built with Tauri v2 + Vue 3 + Rust</p>
         </div>
       </div>

@@ -4,7 +4,7 @@ import { Plus, Upload, Download, FileText } from "lucide-vue-next";
 import RuleCard from "../components/RuleCard.vue";
 import RuleEditor from "../components/RuleEditor.vue";
 import FilterBar, { type FilterState } from "../components/FilterBar.vue";
-import type { Rule, StatusInfo } from "../types";
+import type { Rule } from "../types";
 import { useAuditLog } from "../hooks/useAuditLog";
 
 const rules = inject<Ref<Rule[]>>("rules")!;
@@ -32,35 +32,61 @@ const filtered = computed(() => rules.value.filter((r) => {
 }));
 
 async function handleToggle(id: string) {
-  if ("__TAURI__" in window) { const { toggleRule } = await import("../hooks/useTauri"); await toggleRule(id); refreshRules(); }
-  else rules.value = rules.value.map((r) => r.id === id ? { ...r, enabled: !r.enabled } : r);
-  log("rule.toggle", `Toggled rule ${id}`);
+  try {
+    if ("__TAURI__" in window) { const { toggleRule } = await import("../hooks/useTauri"); await toggleRule(id); refreshRules(); }
+    else rules.value = rules.value.map((r) => r.id === id ? { ...r, enabled: !r.enabled } : r);
+    log("rule.toggle", `Toggled rule ${id}`);
+  } catch (e) { log("rule.toggle", `Failed: ${e}`, "error"); }
 }
 async function handleDelete(id: string) {
-  if ("__TAURI__" in window) { const { deleteRule } = await import("../hooks/useTauri"); await deleteRule(id); refreshRules(); }
-  else rules.value = rules.value.filter((r) => r.id !== id);
-  log("rule.delete", `Deleted rule ${id}`);
+  try {
+    if ("__TAURI__" in window) { const { deleteRule } = await import("../hooks/useTauri"); await deleteRule(id); refreshRules(); }
+    else rules.value = rules.value.filter((r) => r.id !== id);
+    log("rule.delete", `Deleted rule ${id}`);
+  } catch (e) { log("rule.delete", `Failed: ${e}`, "error"); }
 }
-function handleDuplicate(rule: Rule) {
-  rules.value = [...rules.value, { ...rule, id: crypto.randomUUID(), name: `${rule.name} (copy)` }];
-  log("rule.duplicate", `Duplicated "${rule.name}"`);
+async function handleDuplicate(rule: Rule) {
+  try {
+    const dup = { ...rule, id: crypto.randomUUID(), name: `${rule.name} (copy)`, health: "unknown" as const };
+    if ("__TAURI__" in window) {
+      const { addRule } = await import("../hooks/useTauri");
+      const lp = dup.listenPort.type === "single" ? dup.listenPort.port! : dup.listenPort.start!;
+      const cp = dup.connectPort.type === "single" ? dup.connectPort.port! : dup.connectPort.start!;
+      await addRule({ name: dup.name, direction: dup.direction === "winToWsl" ? "WinToWsl" : "WslToWin", listenAddr: dup.listenAddr, listenPort: lp, connectPort: cp, connectAddr: dup.connectAddr, lan: dup.lan });
+      refreshRules();
+    } else {
+      rules.value = [...rules.value, dup];
+    }
+    log("rule.duplicate", `Duplicated "${rule.name}"`);
+  } catch (e) { log("rule.duplicate", `Failed: ${e}`, "error"); }
 }
 async function handleSave(partial: Partial<Rule>) {
-  if (partial.id) {
-    if ("__TAURI__" in window) { const { updateRule } = await import("../hooks/useTauri"); await updateRule(partial as Rule); refreshRules(); }
-    else rules.value = rules.value.map((r) => r.id === partial.id ? { ...r, ...partial } as Rule : r);
-    log("rule.update", `Updated "${partial.name}"`);
-  } else {
-    const nr: Rule = { id: crypto.randomUUID(), name: partial.name ?? "Untitled", direction: partial.direction ?? "winToWsl", listenAddr: partial.listenAddr ?? "0.0.0.0", listenPort: partial.listenPort ?? { type: "single", port: 8080 }, connectPort: partial.connectPort ?? { type: "single", port: 8080 }, connectAddr: partial.connectAddr ?? "${WSL_IP}", distro: partial.distro ?? null, lan: partial.lan ?? true, enabled: partial.enabled ?? true, source: partial.source ?? "manual", note: partial.note ?? null };
-    if ("__TAURI__" in window) { const { addRule } = await import("../hooks/useTauri"); await addRule({ name: nr.name, direction: nr.direction === "winToWsl" ? "WinToWsl" : "WslToWin", listenAddr: nr.listenAddr, listenPort: nr.listenPort.type === "single" ? nr.listenPort.port! : nr.listenPort.start!, connectPort: nr.connectPort.type === "single" ? nr.connectPort.port! : nr.connectPort.start!, connectAddr: nr.connectAddr, lan: nr.lan }); refreshRules(); }
-    else rules.value = [...rules.value, nr];
-    log("rule.add", `Added "${nr.name}"`);
-  }
+  try {
+    if (partial.id) {
+      if ("__TAURI__" in window) { const { updateRule } = await import("../hooks/useTauri"); await updateRule(partial as Rule); refreshRules(); }
+      else rules.value = rules.value.map((r) => r.id === partial.id ? { ...r, ...partial } as Rule : r);
+      log("rule.update", `Updated "${partial.name}"`);
+    } else {
+      const nr: Rule = { id: crypto.randomUUID(), name: partial.name ?? "Untitled", direction: partial.direction ?? "winToWsl", listenAddr: partial.listenAddr ?? "0.0.0.0", listenPort: partial.listenPort ?? { type: "single", port: 8080 }, connectPort: partial.connectPort ?? { type: "single", port: 8080 }, connectAddr: partial.connectAddr ?? "${WSL_IP}", distro: partial.distro ?? null, lan: partial.lan ?? true, enabled: partial.enabled ?? true, source: partial.source ?? "manual", note: partial.note ?? null, health: "unknown" };
+      if ("__TAURI__" in window) {
+        const { addRule } = await import("../hooks/useTauri");
+        const lp = nr.listenPort.type === "single" ? nr.listenPort.port! : nr.listenPort.start!;
+        const cp = nr.connectPort.type === "single" ? nr.connectPort.port! : nr.connectPort.start!;
+        await addRule({ name: nr.name, direction: nr.direction === "winToWsl" ? "WinToWsl" : "WslToWin", listenAddr: nr.listenAddr, listenPort: lp, connectPort: cp, connectAddr: nr.connectAddr, lan: nr.lan });
+        refreshRules();
+      } else {
+        rules.value = [...rules.value, nr];
+      }
+      log("rule.add", `Added "${nr.name}"`);
+    }
+  } catch (e) { log("rule.save", `Failed: ${e}`, "error"); }
   showEditor.value = false; editorRule.value = undefined;
 }
 async function handleImport() {
   if (!importText.value.trim()) return;
-  if ("__TAURI__" in window) { const { importNetshScript } = await import("../hooks/useTauri"); const imp = await importNetshScript(importText.value); refreshRules(); log("rule.import", `Imported ${imp.length} rules`); }
+  try {
+    if ("__TAURI__" in window) { const { importNetshScript } = await import("../hooks/useTauri"); const imp = await importNetshScript(importText.value); refreshRules(); log("rule.import", `Imported ${imp.length} rules`); }
+  } catch (e) { log("rule.import", `Failed: ${e}`, "error"); }
   showImport.value = false; importText.value = "";
 }
 function handleExport() {
@@ -69,15 +95,17 @@ function handleExport() {
   log("rule.export", "Exported rules as JSON");
 }
 async function handleExportPs1() {
-  let script: string;
-  if ("__TAURI__" in window) {
-    const { exportNetshScript } = await import("../hooks/useTauri");
-    script = await exportNetshScript();
-  } else {
-    script = "# WSL PortHole — demo export\n# Run as Administrator\nnetsh interface portproxy reset\n";
-  }
-  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([script], { type: "text/plain" })); a.download = "wsl-porthole-rules.ps1"; a.click();
-  log("rule.export", "Exported rules as .ps1 script");
+  try {
+    let script: string;
+    if ("__TAURI__" in window) {
+      const { exportNetshScript } = await import("../hooks/useTauri");
+      script = await exportNetshScript();
+    } else {
+      script = "# WSL PortHole — demo export\n# Run as Administrator\nnetsh interface portproxy reset\n";
+    }
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([script], { type: "text/plain" })); a.download = "wsl-porthole-rules.ps1"; a.click();
+    log("rule.export", "Exported rules as .ps1 script");
+  } catch (e) { log("rule.export", `Failed: ${e}`, "error"); }
 }
 </script>
 

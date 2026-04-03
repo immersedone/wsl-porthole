@@ -5,6 +5,7 @@ import type { McpServerInfo, Rule } from "../types";
 import { useAuditLog } from "../hooks/useAuditLog";
 
 const rules = inject<Ref<Rule[]>>("rules")!;
+const refreshRules = inject<() => void>("refreshRules")!;
 const { log } = useAuditLog();
 const servers = ref<McpServerInfo[]>([]);
 const loading = ref(false);
@@ -23,9 +24,17 @@ async function refresh() {
 }
 onMounted(refresh);
 
-function addRoute(s: McpServerInfo) {
-  rules.value.push({ id: crypto.randomUUID(), name: `MCP: ${s.container_name}`, direction: "wslToWin", listenAddr: "0.0.0.0", listenPort: { type: "single", port: s.host_port }, connectPort: { type: "single", port: s.port }, connectAddr: "${HOST_GW}", distro: null, lan: false, enabled: true, source: "mcp", note: `MCP from ${s.image}` });
-  log("mcp.add_route", `Added WSL→WIN route for ${s.container_name}`);
+async function addRoute(s: McpServerInfo) {
+  try {
+    if ("__TAURI__" in window) {
+      const { addRule } = await import("../hooks/useTauri");
+      await addRule({ name: `MCP: ${s.container_name}`, direction: "WslToWin", listenAddr: "0.0.0.0", listenPort: s.host_port, connectPort: s.port, connectAddr: "${HOST_GW}", lan: false });
+      refreshRules();
+    } else {
+      rules.value.push({ id: crypto.randomUUID(), name: `MCP: ${s.container_name}`, direction: "wslToWin", listenAddr: "0.0.0.0", listenPort: { type: "single", port: s.host_port }, connectPort: { type: "single", port: s.port }, connectAddr: "${HOST_GW}", distro: null, lan: false, enabled: true, source: "mcp", note: `MCP from ${s.image}`, health: "unknown" });
+    }
+    log("mcp.add_route", `Added WSL→WIN route for ${s.container_name}`);
+  } catch (e) { log("mcp.add_route", `Failed: ${e}`, "error"); }
 }
 function hasRoute(port: number) { return rules.value.some((r) => r.source === "mcp" && r.listenPort.type === "single" && r.listenPort.port === port); }
 </script>

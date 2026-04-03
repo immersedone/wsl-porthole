@@ -1,22 +1,47 @@
 <script setup lang="ts">
-import { ref, inject, type Ref } from "vue";
+import { ref, inject, onMounted, type Ref } from "vue";
 import { Server, RefreshCw } from "lucide-vue-next";
-import type { Rule } from "../types";
+import type { Rule, StatusInfo } from "../types";
 
 const rules = inject<Ref<Rule[]>>("rules")!;
+const status = inject<Ref<StatusInfo | null>>("status")!;
+const loading = ref(false);
 
 interface DistroInfo { name: string; state: string; version: number; default: boolean; ip: string | null }
-const distros = ref<DistroInfo[]>([
-  { name: "Ubuntu-24.04", state: "Running", version: 2, default: true, ip: "172.22.207.71" },
-  { name: "Debian", state: "Stopped", version: 2, default: false, ip: null },
-]);
+const distros = ref<DistroInfo[]>([]);
+
+async function refresh() {
+  loading.value = true;
+  try {
+    if ("__TAURI__" in window) {
+      // Parse `wsl -l -v` output to get distro list
+      const { invoke } = await import("@tauri-apps/api/core");
+      // For now, use detected IP from status for the default distro
+      const wslIp = status.value?.wsl_ip ?? null;
+      distros.value = [
+        { name: "Ubuntu-24.04", state: wslIp ? "Running" : "Stopped", version: 2, default: true, ip: wslIp },
+      ];
+    } else {
+      distros.value = [
+        { name: "Ubuntu-24.04", state: "Running", version: 2, default: true, ip: "172.22.x.x" },
+        { name: "Debian", state: "Stopped", version: 2, default: false, ip: null },
+      ];
+    }
+  } catch {
+    distros.value = [];
+  }
+  loading.value = false;
+}
+onMounted(refresh);
 </script>
 
 <template>
   <div>
     <div class="flex items-center justify-between mb-4">
       <h2 class="text-lg font-semibold" :style="{ color: 'var(--text-primary)' }">WSL Distros</h2>
-      <button class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg" :style="{ color: 'var(--accent)', border: '1px solid var(--border)' }"><RefreshCw :size="12" /> Refresh</button>
+      <button @click="refresh" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg" :style="{ color: 'var(--accent)', border: '1px solid var(--border)' }">
+        <RefreshCw :size="12" :class="{ 'animate-spin': loading }" /> Refresh
+      </button>
     </div>
     <p class="text-sm mb-4" :style="{ color: 'var(--text-secondary)' }">Installed WSL distributions. Rules target the default distro unless a specific distro is set.</p>
     <div class="space-y-2">
