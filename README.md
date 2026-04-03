@@ -126,17 +126,6 @@ If you just need port forwarding working right now:
 .\docs\scripts\wsl-porthole-bridge.ps1
 ```
 
-## Microsoft Store
-
-WSL PortHole can be packaged as MSIX for the Microsoft Store. To build an MSIX from the MSI:
-
-1. Install the [MSIX Packaging Tool](https://learn.microsoft.com/en-us/windows/msix/packaging-tool/tool-overview) from the Store
-2. Convert the MSI: `MsixPackagingTool.exe create-package` and follow the wizard
-3. Register at [Microsoft Partner Center](https://partner.microsoft.com/dashboard) ($19 one-time fee)
-4. Upload the MSIX, fill in the listing, submit for certification (~1-3 days)
-
-Category: **Developer tools > Utilities**
-
 ## Tech stack
 
 | Layer | Technology |
