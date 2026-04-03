@@ -1,23 +1,52 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, onMounted } from "vue";
 import { Zap, Plus, Trash2, GripVertical, Play, Clock } from "lucide-vue-next";
 import { useAuditLog } from "../hooks/useAuditLog";
+import { isTauri } from "../lib/tauri";
 
 const { log } = useAuditLog();
 
-interface StartupAction { id: string; label: string; type: "builtin" | "custom"; command: string; delayMs: number; enabled: boolean; target: string }
-const actions = ref<StartupAction[]>([
-  { id: "1", label: "Sync port rules", type: "builtin", command: "sync-rules", delayMs: 0, enabled: true, target: "all" },
-  { id: "2", label: "Write /etc/hosts", type: "builtin", command: "write-hosts", delayMs: 1000, enabled: true, target: "all" },
-  { id: "3", label: "Inject env vars", type: "builtin", command: "inject-env", delayMs: 2000, enabled: false, target: "all" },
-]);
+interface StartupAction { id: string; label: string; type: string; command: string; delayMs: number; enabled: boolean; target: string }
+const actions = ref<StartupAction[]>([]);
 const newCmd = ref("");
 
-function add() {
+async function load() {
+  if (isTauri) {
+    try {
+      const { getSettings } = await import("../hooks/useTauri");
+      const s = await getSettings();
+      if (s.startupActions?.length) {
+        actions.value = s.startupActions.map((a: any) => ({ ...a, type: a.actionType ?? a.type }));
+        return;
+      }
+    } catch {}
+  }
+  // Defaults
+  actions.value = [
+    { id: "1", label: "Sync port rules", type: "builtin", command: "sync-rules", delayMs: 0, enabled: true, target: "all" },
+    { id: "2", label: "Write /etc/hosts", type: "builtin", command: "write-hosts", delayMs: 1000, enabled: true, target: "all" },
+    { id: "3", label: "Inject env vars", type: "builtin", command: "inject-env", delayMs: 2000, enabled: false, target: "all" },
+  ];
+}
+
+async function persist() {
+  if (!isTauri) return;
+  try {
+    const { getSettings, saveSettings } = await import("../hooks/useTauri");
+    const s = await getSettings();
+    s.startupActions = actions.value.map((a) => ({ ...a, actionType: a.type }));
+    await saveSettings(s);
+  } catch (e) { log("startup.save", `Failed: ${e}`, "error"); }
+}
+
+onMounted(load);
+
+async function add() {
   if (!newCmd.value.trim()) return;
   actions.value.push({ id: crypto.randomUUID(), label: newCmd.value.trim().split(" ")[0], type: "custom", command: newCmd.value.trim(), delayMs: 0, enabled: true, target: "all" });
   log("startup.add", `Added: ${newCmd.value.trim()}`);
   newCmd.value = "";
+  await persist();
 }
 </script>
 
@@ -35,9 +64,9 @@ function add() {
         <span v-if="a.delayMs > 0" class="flex items-center gap-0.5 text-[10px]" :style="{ color: 'var(--text-secondary)' }"><Clock :size="10" /> +{{ a.delayMs }}ms</span>
         <span class="text-[10px] px-1.5 py-0.5 rounded" :style="{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }">{{ a.target }}</span>
         <div class="flex-1" />
-        <input type="number" v-model.number="a.delayMs" class="w-20 text-xs px-2 py-0.5 rounded text-right" :style="{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }" />
-        <button @click="a.enabled = !a.enabled"><Play :size="12" :style="{ color: a.enabled ? 'var(--status-ok)' : 'var(--text-secondary)' }" /></button>
-        <button v-if="a.type === 'custom'" @click="actions = actions.filter((x) => x.id !== a.id)"><Trash2 :size="12" :style="{ color: 'var(--status-err)' }" /></button>
+        <input type="number" v-model.number="a.delayMs" @change="persist" class="w-20 text-xs px-2 py-0.5 rounded text-right" :style="{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }" />
+        <button @click="a.enabled = !a.enabled; persist()"><Play :size="12" :style="{ color: a.enabled ? 'var(--status-ok)' : 'var(--text-secondary)' }" /></button>
+        <button v-if="a.type === 'custom'" @click="actions = actions.filter((x) => x.id !== a.id); persist()"><Trash2 :size="12" :style="{ color: 'var(--status-err)' }" /></button>
       </div>
     </div>
     <div class="flex items-center gap-2">

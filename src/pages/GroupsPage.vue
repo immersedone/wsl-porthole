@@ -1,35 +1,66 @@
 <script setup lang="ts">
-import { ref, inject, type Ref } from "vue";
+import { ref, inject, onMounted, type Ref } from "vue";
 import { FolderOpen, Plus, Power, Trash2 } from "lucide-vue-next";
 import type { Rule } from "../types";
 import { useAuditLog } from "../hooks/useAuditLog";
+import { isTauri } from "../lib/tauri";
 
 const rules = inject<Ref<Rule[]>>("rules")!;
 const { log } = useAuditLog();
 
-interface RuleGroup { id: string; name: string; ruleIds: string[]; enabled: boolean; startupBehavior: "none" | "enable" | "disable" }
+interface RuleGroup { id: string; name: string; ruleIds: string[]; enabled: boolean; startupBehavior: string }
 
-const groups = ref<RuleGroup[]>([
-  { id: "1", name: "Web Stack", ruleIds: ["1", "2", "3"], enabled: true, startupBehavior: "enable" },
-  { id: "2", name: "Dev Tools", ruleIds: ["6", "7"], enabled: false, startupBehavior: "none" },
-]);
+const groups = ref<RuleGroup[]>([]);
 const newName = ref("");
 
-function addGroup() {
+async function loadGroups() {
+  if (isTauri) {
+    try {
+      const { getSettings } = await import("../hooks/useTauri");
+      const s = await getSettings();
+      groups.value = s.groups ?? [];
+    } catch { /* use defaults */ }
+  }
+  if (!groups.value.length) {
+    groups.value = [
+      { id: "1", name: "Web Stack", ruleIds: ["1", "2", "3"], enabled: true, startupBehavior: "enable" },
+      { id: "2", name: "Dev Tools", ruleIds: ["6", "7"], enabled: false, startupBehavior: "none" },
+    ];
+  }
+}
+
+async function persist() {
+  if (!isTauri) return;
+  try {
+    const { getSettings, saveSettings } = await import("../hooks/useTauri");
+    const s = await getSettings();
+    s.groups = groups.value;
+    await saveSettings(s);
+  } catch (e) { log("groups.save", `Failed: ${e}`, "error"); }
+}
+
+onMounted(loadGroups);
+
+async function addGroup() {
   if (!newName.value.trim()) return;
   groups.value.push({ id: crypto.randomUUID(), name: newName.value.trim(), ruleIds: [], enabled: true, startupBehavior: "none" });
   log("group.add", `Created group "${newName.value.trim()}"`);
   newName.value = "";
+  await persist();
 }
-function toggleGroup(g: RuleGroup) {
+
+async function toggleGroup(g: RuleGroup) {
   g.enabled = !g.enabled;
   rules.value = rules.value.map((r) => g.ruleIds.includes(r.id) ? { ...r, enabled: g.enabled } : r);
   log("group.toggle", `${g.enabled ? "Enabled" : "Disabled"} group "${g.name}"`);
+  await persist();
 }
-function deleteGroup(id: string) {
+
+async function deleteGroup(id: string) {
   const g = groups.value.find((x) => x.id === id);
   groups.value = groups.value.filter((x) => x.id !== id);
   if (g) log("group.delete", `Deleted group "${g.name}"`);
+  await persist();
 }
 </script>
 
@@ -49,7 +80,7 @@ function deleteGroup(id: string) {
           <span class="font-medium text-sm" :style="{ color: 'var(--text-primary)' }">{{ g.name }}</span>
           <span class="text-xs" :style="{ color: 'var(--text-secondary)' }">{{ rules.filter((r) => g.ruleIds.includes(r.id)).length }} rules</span>
           <div class="flex-1" />
-          <select v-model="g.startupBehavior" class="text-[10px] px-2 py-0.5 rounded" :style="{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }">
+          <select v-model="g.startupBehavior" @change="persist" class="text-[10px] px-2 py-0.5 rounded" :style="{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }">
             <option value="none">No startup action</option><option value="enable">Enable on startup</option><option value="disable">Disable on startup</option>
           </select>
           <button @click="toggleGroup(g)"><Power :size="14" :style="{ color: g.enabled ? 'var(--status-ok)' : 'var(--text-secondary)' }" /></button>

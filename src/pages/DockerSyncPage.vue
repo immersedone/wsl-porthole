@@ -15,7 +15,7 @@ const engine = ref<"wsl" | "windows">("wsl");
 async function refresh() {
   loading.value = true; error.value = null;
   try {
-    if ("__TAURI__" in window) { const { listDockerContainers } = await import("../hooks/useTauri"); containers.value = await listDockerContainers(); }
+    if ("__TAURI__" in window) { const { listDockerContainers } = await import("../hooks/useTauri"); containers.value = await listDockerContainers(engine.value); }
     else containers.value = [
       { id: "abc123", name: "postgres-dev", image: "postgres:16", status: "Up 2 hours", ports: [{ host_port: 5432, container_port: 5432, protocol: "tcp" }], compose_project: "myapp" },
       { id: "def456", name: "redis-cache", image: "redis:7-alpine", status: "Up 2 hours", ports: [{ host_port: 6379, container_port: 6379, protocol: "tcp" }], compose_project: "myapp" },
@@ -56,7 +56,7 @@ function hasRule(port: number) { return rules.value.some((r) => r.listenPort.typ
     <div class="flex items-center justify-between mb-4">
       <h2 class="text-lg font-semibold" :style="{ color: 'var(--text-primary)' }">Docker Sync</h2>
       <div class="flex items-center gap-2">
-        <select v-model="engine" class="text-xs px-2 py-1 rounded" :style="{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }">
+        <select v-model="engine" @change="refresh" class="text-xs px-2 py-1 rounded" :style="{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }">
           <option value="wsl">WSL Engine</option><option value="windows">Windows Engine</option>
         </select>
         <button @click="refresh" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg" :style="{ color: 'var(--accent)', border: '1px solid var(--border)' }"><RefreshCw :size="12" :class="{ 'animate-spin': loading }" /> Refresh</button>

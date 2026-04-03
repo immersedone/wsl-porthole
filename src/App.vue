@@ -62,8 +62,37 @@ onMounted(() => {
   refreshStatus();
   refreshRules();
   interval = setInterval(refreshStatus, 10000);
+
+  // Global keyboard shortcuts
+  document.addEventListener("keydown", handleKeydown);
 });
-onUnmounted(() => clearInterval(interval));
+onUnmounted(() => {
+  clearInterval(interval);
+  document.removeEventListener("keydown", handleKeydown);
+});
+
+function handleKeydown(e: KeyboardEvent) {
+  // Ctrl+N — add rule (navigate to rules page, trigger add)
+  if (e.ctrlKey && e.key === "n") {
+    e.preventDefault();
+    activePage.value = "rules";
+  }
+  // Ctrl+F — focus search (navigate to rules page)
+  if (e.ctrlKey && e.key === "f") {
+    e.preventDefault();
+    activePage.value = "rules";
+    // Focus the search input after page renders
+    setTimeout(() => {
+      const input = document.querySelector<HTMLInputElement>('input[placeholder="Search rules..."]');
+      input?.focus();
+    }, 50);
+  }
+  // Ctrl+S — sync now
+  if (e.ctrlKey && e.key === "s") {
+    e.preventDefault();
+    refreshStatus();
+  }
+}
 
 const pageComponents: Record<Page, any> = {
   rules: RulesPage,

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import {
   Network, FolderOpen, Container, Radio, Globe, Shield, Server,
   Zap, HardDrive, FileText, BookOpen, Palette, Settings,
@@ -27,15 +28,15 @@ const navItems: NavItem[] = [
   { page: "settings", label: "Settings", icon: Settings },
 ];
 
-let currentSection = "";
-function showSection(item: NavItem) {
-  if (item.section && item.section !== currentSection) {
-    currentSection = item.section;
-    return true;
-  }
-  if (item.section) currentSection = item.section;
-  return false;
-}
+// Computed section breaks — no side effects during render
+const navWithSections = computed(() => {
+  let lastSection = "";
+  return navItems.map((item) => {
+    const showSection = item.section && item.section !== lastSection;
+    if (item.section) lastSection = item.section;
+    return { ...item, showSection: !!showSection };
+  });
+});
 </script>
 
 <template>
@@ -46,11 +47,9 @@ function showSection(item: NavItem) {
       <p class="text-xs mt-0.5" :style="{ color: 'var(--text-secondary)' }">Port forwarding manager</p>
     </div>
     <nav class="flex-1 overflow-y-auto py-2">
-      <template v-for="item in navItems" :key="item.page">
-        <div v-if="showSection(item)" class="px-4 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider"
-          :style="{ color: 'var(--text-secondary)' }">
-          {{ item.section }}
-        </div>
+      <template v-for="item in navWithSections" :key="item.page">
+        <div v-if="item.showSection" class="px-4 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider"
+          :style="{ color: 'var(--text-secondary)' }">{{ item.section }}</div>
         <button @click="emit('navigate', item.page)"
           class="w-full flex items-center gap-2.5 px-4 py-1.5 text-sm transition-colors"
           :style="{ color: activePage === item.page ? 'var(--accent)' : 'var(--text-secondary)', background: activePage === item.page ? 'var(--bg-tertiary)' : 'transparent' }">

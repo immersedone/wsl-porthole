@@ -38,9 +38,15 @@ function copyCmd() {
   navigator.clipboard.writeText(`netsh interface portproxy add v4tov4 listenport=${lp} listenaddress=${props.rule.listenAddr} connectport=${cp} connectaddress=${props.rule.connectAddr}`);
 }
 
-function openInBrowser() {
+async function openInBrowser() {
   const port = props.rule.listenPort.type === "single" ? props.rule.listenPort.port : props.rule.listenPort.start;
-  globalThis.window.open(`http://localhost:${port}`, "_blank");
+  const url = `http://localhost:${port}`;
+  if ("__TAURI__" in window) {
+    const { open } = await import("@tauri-apps/plugin-shell");
+    await open(url);
+  } else {
+    globalThis.window.open(url, "_blank");
+  }
 }
 </script>
 
@@ -67,8 +73,9 @@ function openInBrowser() {
       <Globe v-if="rule.lan" :size="13" :style="{ color: 'var(--status-warn)' }" />
       <Lock v-else :size="13" :style="{ color: 'var(--text-secondary)' }" />
     </span>
-    <span v-if="rule.distro" class="text-[10px] px-1.5 py-0.5 rounded"
-      :style="{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }">{{ rule.distro }}</span>
+    <span class="text-[10px] px-1.5 py-0.5 rounded"
+      :style="{ background: 'var(--bg-tertiary)', color: rule.distro ? 'var(--accent)' : 'var(--text-secondary)' }"
+      :title="rule.distro ? `Targeting: ${rule.distro}` : 'Using default distro'">{{ rule.distro || 'default' }}</span>
     <span v-if="rule.conflict" class="text-[10px] px-1.5 py-0.5 rounded"
       :style="{ background: 'var(--status-warn)', color: '#000' }" :title="rule.conflict">conflict</span>
     <div class="flex-1" />

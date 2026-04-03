@@ -10,3 +10,4 @@ pub mod ip;
 pub mod mcp;
 pub mod netsh;
 pub mod rules;
+pub mod settings;

@@ -13,7 +13,15 @@ const qrUrl = ref<string | null>(null);
 function getPort(rule: Rule) { return rule.listenPort.type === "single" ? rule.listenPort.port! : rule.listenPort.start!; }
 function getUrl(rule: Rule) { return `http://${hostIp.value}:${getPort(rule)}`; }
 function copyUrl(rule: Rule) { navigator.clipboard.writeText(getUrl(rule)); }
-function openUrl(rule: Rule) { globalThis.window.open(getUrl(rule), "_blank"); }
+async function openUrl(rule: Rule) {
+  const url = getUrl(rule);
+  if ("__TAURI__" in window) {
+    const { open } = await import("@tauri-apps/plugin-shell");
+    await open(url);
+  } else {
+    globalThis.window.open(url, "_blank");
+  }
+}
 function showQr(rule: Rule) { qrUrl.value = getUrl(rule); }
 </script>
 

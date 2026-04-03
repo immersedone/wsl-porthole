@@ -576,4 +576,6 @@ After running once, rules auto-update on every WSL restart forever.
 
 | Version | Date | Notes |
 |---|---|---|
+| 0.3.0 | 2026-04-03 | Real QR codes, settings/groups/startup persistence, custom theme editor, .wslconfig write, distro aliases, keyboard shortcuts, Docker engine toggle, duplicate tray icon fix |
+| 0.2.0 | 2026-04-03 | Hyper-V event subscription, system tray, auto-updater |
 | 0.1.0-alpha | 2026-04-03 | Initial release — full core library, Windows Service, Tauri GUI with 13 pages and 13 themes, NSIS/MSI installers |

@@ -1,12 +1,17 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
-import { AlertTriangle, Save } from "lucide-vue-next";
+import { ref, computed, onMounted } from "vue";
+import { AlertTriangle, Save, RefreshCw } from "lucide-vue-next";
 import { useAuditLog } from "../hooks/useAuditLog";
+import { isTauri } from "../lib/tauri";
 
 const { log } = useAuditLog();
 
 interface Entry { key: string; value: string; description: string; section: string }
-const entries = ref<Entry[]>([
+const entries = ref<Entry[]>([]);
+const loading = ref(false);
+const rawContent = ref("");
+
+const defaultEntries: Entry[] = [
   { key: "networkingMode", value: "NAT", description: "Network mode (NAT or mirrored)", section: "wsl2" },
   { key: "memory", value: "8GB", description: "Maximum memory allocation", section: "wsl2" },
   { key: "processors", value: "4", description: "Number of logical processors", section: "wsl2" },
@@ -14,7 +19,70 @@ const entries = ref<Entry[]>([
   { key: "localhostForwarding", value: "true", description: "Enable localhost forwarding", section: "wsl2" },
   { key: "dnsTunneling", value: "true", description: "Enable DNS tunneling", section: "experimental" },
   { key: "autoProxy", value: "true", description: "Auto-configure proxy settings", section: "experimental" },
-]);
+];
+
+const descriptions: Record<string, string> = {
+  networkingMode: "Network mode (NAT or mirrored)", memory: "Maximum memory allocation",
+  processors: "Number of logical processors", swap: "Swap file size",
+  localhostForwarding: "Enable localhost forwarding", dnsTunneling: "Enable DNS tunneling",
+  autoProxy: "Auto-configure proxy settings",
+};
+
+function parseWslconfig(content: string): Entry[] {
+  const result: Entry[] = [];
+  let section = "wsl2";
+  for (const line of content.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("[")) { section = trimmed.replace(/[[\]]/g, ""); continue; }
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const [key, ...rest] = trimmed.split("=");
+    if (key && rest.length) {
+      const k = key.trim();
+      result.push({ key: k, value: rest.join("=").trim(), description: descriptions[k] ?? "", section });
+    }
+  }
+  return result.length ? result : defaultEntries;
+}
+
+function toWslconfig(): string {
+  const sections: Record<string, Entry[]> = {};
+  for (const e of entries.value) (sections[e.section] ??= []).push(e);
+  let out = "";
+  for (const [sec, items] of Object.entries(sections)) {
+    out += `[${sec}]\n`;
+    for (const e of items) out += `${e.key}=${e.value}\n`;
+    out += "\n";
+  }
+  return out;
+}
+
+async function load() {
+  loading.value = true;
+  if (isTauri) {
+    try {
+      const { readWslconfig } = await import("../hooks/useTauri");
+      rawContent.value = await readWslconfig();
+      entries.value = parseWslconfig(rawContent.value);
+    } catch { entries.value = defaultEntries; }
+  } else {
+    entries.value = defaultEntries;
+  }
+  loading.value = false;
+}
+
+async function save() {
+  if (isTauri) {
+    try {
+      const { writeWslconfig } = await import("../hooks/useTauri");
+      await writeWslconfig(toWslconfig());
+      log("wslconfig.save", "Saved .wslconfig");
+    } catch (e) { log("wslconfig.save", `Failed: ${e}`, "error"); }
+  } else {
+    log("wslconfig.save", "Saved .wslconfig (demo mode)");
+  }
+}
+
+onMounted(load);
 
 const warnings = computed(() => {
   const w: string[] = [];
@@ -30,15 +98,16 @@ const sections = computed(() => {
   for (const e of entries.value) (m[e.section] ??= []).push(e);
   return m;
 });
-
-function save() { log("wslconfig.save", "Saved .wslconfig changes"); }
 </script>
 
 <template>
   <div>
     <div class="flex items-center justify-between mb-4">
       <h2 class="text-lg font-semibold" :style="{ color: 'var(--text-primary)' }">.wslconfig Inspector</h2>
-      <button @click="save" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium" :style="{ background: 'var(--accent)', color: 'var(--bg-primary)' }"><Save :size="12" /> Save & Restart WSL</button>
+      <div class="flex items-center gap-2">
+        <button @click="load" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg" :style="{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }"><RefreshCw :size="12" :class="{ 'animate-spin': loading }" /> Reload</button>
+        <button @click="save" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium" :style="{ background: 'var(--accent)', color: 'var(--bg-primary)' }"><Save :size="12" /> Save</button>
+      </div>
     </div>
     <div v-if="warnings.length" class="rounded-lg p-3 mb-4" :style="{ background: 'var(--bg-secondary)', border: '1px solid var(--status-warn)' }">
       <div v-for="(w, i) in warnings" :key="i" class="flex items-start gap-2 text-xs mb-1 last:mb-0" :style="{ color: 'var(--status-warn)' }">

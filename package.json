@@ -1,7 +1,7 @@
 {
   "name": "wsl-porthole",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,11 +13,13 @@
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-shell": "^2.0.0",
     "lucide-vue-next": "^0.460.0",
+    "qrcode": "^1.5.4",
     "vue": "^3.5.0",
     "vue-router": "^4.4.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",
+    "@types/qrcode": "^1.5.6",
     "@vitejs/plugin-vue": "^5.2.0",
     "autoprefixer": "^10.4.0",
     "postcss": "^8.4.0",
