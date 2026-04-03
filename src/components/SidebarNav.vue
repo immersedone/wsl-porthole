@@ -1,0 +1,71 @@
+<script setup lang="ts">
+import {
+  Network, FolderOpen, Container, Radio, Globe, Shield, Server,
+  Zap, HardDrive, FileText, BookOpen, Palette, Settings,
+} from "lucide-vue-next";
+import type { Component } from "vue";
+import type { Page, StatusInfo } from "../types";
+
+defineProps<{ activePage: Page; status: StatusInfo | null }>();
+const emit = defineEmits<{ navigate: [page: Page] }>();
+
+interface NavItem { page: Page; label: string; icon: Component; section?: string }
+
+const navItems: NavItem[] = [
+  { page: "rules", label: "Port Rules", icon: Network, section: "Manage" },
+  { page: "groups", label: "Groups", icon: FolderOpen },
+  { page: "docker", label: "Docker Sync", icon: Container },
+  { page: "mcp", label: "MCP Servers", icon: Radio },
+  { page: "lan", label: "LAN Access", icon: Globe, section: "Network" },
+  { page: "firewall", label: "Firewall", icon: Shield },
+  { page: "distros", label: "Distros", icon: Server },
+  { page: "startup", label: "Startup Actions", icon: Zap, section: "System" },
+  { page: "service", label: "Boot Service", icon: HardDrive },
+  { page: "wslconfig", label: ".wslconfig", icon: FileText },
+  { page: "audit", label: "Audit Log", icon: BookOpen },
+  { page: "appearance", label: "Appearance", icon: Palette, section: "Preferences" },
+  { page: "settings", label: "Settings", icon: Settings },
+];
+
+let currentSection = "";
+function showSection(item: NavItem) {
+  if (item.section && item.section !== currentSection) {
+    currentSection = item.section;
+    return true;
+  }
+  if (item.section) currentSection = item.section;
+  return false;
+}
+</script>
+
+<template>
+  <aside class="w-52 h-full flex flex-col border-r"
+    :style="{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }">
+    <div class="px-4 py-4 border-b" :style="{ borderColor: 'var(--border)' }">
+      <h1 class="text-base font-bold tracking-tight" :style="{ color: 'var(--accent)' }">WSL PortHole</h1>
+      <p class="text-xs mt-0.5" :style="{ color: 'var(--text-secondary)' }">Port forwarding manager</p>
+    </div>
+    <nav class="flex-1 overflow-y-auto py-2">
+      <template v-for="item in navItems" :key="item.page">
+        <div v-if="showSection(item)" class="px-4 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider"
+          :style="{ color: 'var(--text-secondary)' }">
+          {{ item.section }}
+        </div>
+        <button @click="emit('navigate', item.page)"
+          class="w-full flex items-center gap-2.5 px-4 py-1.5 text-sm transition-colors"
+          :style="{ color: activePage === item.page ? 'var(--accent)' : 'var(--text-secondary)', background: activePage === item.page ? 'var(--bg-tertiary)' : 'transparent' }">
+          <component :is="item.icon" :size="15" />
+          <span>{{ item.label }}</span>
+        </button>
+      </template>
+    </nav>
+    <div v-if="status" class="px-4 py-3 text-xs border-t"
+      :style="{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }">
+      <div class="flex items-center gap-1.5">
+        <span class="w-1.5 h-1.5 rounded-full"
+          :style="{ background: status.wsl_ip ? 'var(--status-ok)' : 'var(--status-err)' }" />
+        <span>{{ status.active_rules }} active rules</span>
+      </div>
+    </div>
+  </aside>
+</template>

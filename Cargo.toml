@@ -2,5 +2,6 @@
 members = [
     "crates/wsl-porthole-core",
     "crates/wsl-porthole-service",
+    "src-tauri",
 ]
 resolver = "2"
