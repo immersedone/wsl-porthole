@@ -14,6 +14,7 @@ const checking = ref(false);
 const error = ref<string | null>(null);
 const lastChecked = ref<string | null>(null);
 const autoUpdate = ref(true);
+const downloadUrl = ref<string | null>(null);
 
 async function loadVersion() {
   if (isTauri) {
@@ -30,12 +31,23 @@ async function checkForUpdates() {
   checking.value = true;
   error.value = null;
   try {
+    // Check GitHub releases API directly for the latest version
     if (isTauri) {
-      const { checkForAppUpdates } = await import("../hooks/useTauri");
-      const result = await checkForAppUpdates();
-      latestVersion.value = result;
+      try {
+        const { checkForAppUpdates } = await import("../hooks/useTauri");
+        const result = await checkForAppUpdates();
+        latestVersion.value = result;
+      } catch {
+        // Tauri updater not configured with signing keys — check GitHub API directly
+        const resp = await globalThis.fetch("https://api.github.com/repos/immersedone/wsl-porthole/releases/latest");
+        if (resp.ok) {
+          const data = await resp.json();
+          const tag = (data.tag_name ?? "").replace(/^v/, "");
+          latestVersion.value = tag !== currentVersion.value ? tag : null;
+          downloadUrl.value = data.html_url ?? null;
+        }
+      }
     } else {
-      // No demo data — just report current version
       latestVersion.value = null;
     }
     lastChecked.value = new Date().toLocaleTimeString();
@@ -52,6 +64,18 @@ async function checkForUpdates() {
 }
 
 const hasUpdate = () => latestVersion.value && latestVersion.value !== currentVersion.value;
+
+async function openRelease() {
+  const url = downloadUrl.value ?? `https://github.com/immersedone/wsl-porthole/releases/tag/v${latestVersion.value}`;
+  if (isTauri) {
+    try {
+      const { open } = await import("@tauri-apps/plugin-shell");
+      await open(url);
+    } catch { globalThis.window.open(url, "_blank"); }
+  } else {
+    globalThis.window.open(url, "_blank");
+  }
+}
 
 onMounted(() => {
   loadVersion();
@@ -90,10 +114,10 @@ onMounted(() => {
       </div>
 
       <div v-if="hasUpdate()" class="mt-3">
-        <button class="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium"
+        <button @click="openRelease" class="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium"
           :style="{ background: 'var(--accent)', color: 'var(--bg-primary)' }"
-          title="Download and install the latest version">
-          <Download :size="14" /> Download & Install v{{ latestVersion }}
+          title="Open the release page to download the latest version">
+          <Download :size="14" /> Download v{{ latestVersion }}
         </button>
       </div>
 
@@ -127,7 +151,7 @@ onMounted(() => {
     <div class="flex items-start gap-2 mt-4 p-3 rounded-lg" :style="{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }">
       <Info :size="14" class="mt-0.5 shrink-0" :style="{ color: 'var(--accent)' }" />
       <div class="text-xs" :style="{ color: 'var(--text-secondary)' }">
-        <p>Updates are delivered through the Tauri auto-updater. The app will download the update in the background and prompt you to restart when ready.</p>
+        <p>Updates are checked against GitHub releases. When a new version is available, click the download button to open the release page where you can download the latest installer.</p>
       </div>
     </div>
   </div>
