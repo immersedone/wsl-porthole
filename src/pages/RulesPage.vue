@@ -6,10 +6,12 @@ import RuleEditor from "../components/RuleEditor.vue";
 import FilterBar, { type FilterState } from "../components/FilterBar.vue";
 import type { Rule } from "../types";
 import { useAuditLog } from "../hooks/useAuditLog";
+import { useToast } from "../hooks/useToast";
 
 const rules = inject<Ref<Rule[]>>("rules")!;
 const refreshRules = inject<() => void>("refreshRules")!;
 const { log } = useAuditLog();
+const { show: showToast } = useToast();
 
 const filters = ref<FilterState>({ search: "", direction: "all", source: "all", scope: "all", health: "all", enabled: "all" });
 const selectedId = ref<string | null>(null);
@@ -36,14 +38,16 @@ async function handleToggle(id: string) {
     if ("__TAURI__" in window) { const { toggleRule } = await import("../hooks/useTauri"); await toggleRule(id); refreshRules(); }
     else rules.value = rules.value.map((r) => r.id === id ? { ...r, enabled: !r.enabled } : r);
     log("rule.toggle", `Toggled rule ${id}`);
-  } catch (e) { log("rule.toggle", `Failed: ${e}`, "error"); }
+    showToast("Rule toggled", "success");
+  } catch (e) { log("rule.toggle", `Failed: ${e}`, "error"); showToast(`Toggle failed: ${e}`, "error"); }
 }
 async function handleDelete(id: string) {
   try {
     if ("__TAURI__" in window) { const { deleteRule } = await import("../hooks/useTauri"); await deleteRule(id); refreshRules(); }
     else rules.value = rules.value.filter((r) => r.id !== id);
     log("rule.delete", `Deleted rule ${id}`);
-  } catch (e) { log("rule.delete", `Failed: ${e}`, "error"); }
+    showToast("Rule deleted", "success");
+  } catch (e) { log("rule.delete", `Failed: ${e}`, "error"); showToast(`Delete failed: ${e}`, "error"); }
 }
 async function handleDuplicate(rule: Rule) {
   try {
@@ -58,7 +62,8 @@ async function handleDuplicate(rule: Rule) {
       rules.value = [...rules.value, dup];
     }
     log("rule.duplicate", `Duplicated "${rule.name}"`);
-  } catch (e) { log("rule.duplicate", `Failed: ${e}`, "error"); }
+    showToast(`Duplicated "${rule.name}"`, "success");
+  } catch (e) { log("rule.duplicate", `Failed: ${e}`, "error"); showToast(`Duplicate failed: ${e}`, "error"); }
 }
 async function handleSave(partial: Partial<Rule>) {
   try {
@@ -66,6 +71,7 @@ async function handleSave(partial: Partial<Rule>) {
       if ("__TAURI__" in window) { const { updateRule } = await import("../hooks/useTauri"); await updateRule(partial as Rule); refreshRules(); }
       else rules.value = rules.value.map((r) => r.id === partial.id ? { ...r, ...partial } as Rule : r);
       log("rule.update", `Updated "${partial.name}"`);
+      showToast(`Updated "${partial.name}"`, "success");
     } else {
       const nr: Rule = { id: crypto.randomUUID(), name: partial.name ?? "Untitled", direction: partial.direction ?? "winToWsl", listenAddr: partial.listenAddr ?? "0.0.0.0", listenPort: partial.listenPort ?? { type: "single", port: 8080 }, connectPort: partial.connectPort ?? { type: "single", port: 8080 }, connectAddr: partial.connectAddr ?? "${WSL_IP}", distro: partial.distro ?? null, lan: partial.lan ?? true, enabled: partial.enabled ?? true, source: partial.source ?? "manual", note: partial.note ?? null, health: "unknown" };
       if ("__TAURI__" in window) {
@@ -78,31 +84,29 @@ async function handleSave(partial: Partial<Rule>) {
         rules.value = [...rules.value, nr];
       }
       log("rule.add", `Added "${nr.name}"`);
+      showToast(`Added "${nr.name}"`, "success");
     }
-  } catch (e) { log("rule.save", `Failed: ${e}`, "error"); }
+  } catch (e) { log("rule.save", `Failed: ${e}`, "error"); showToast(`Save failed: ${e}`, "error"); }
   showEditor.value = false; editorRule.value = undefined;
 }
 async function handleImport() {
   if (!importText.value.trim()) return;
   try {
-    if ("__TAURI__" in window) { const { importNetshScript } = await import("../hooks/useTauri"); const imp = await importNetshScript(importText.value); refreshRules(); log("rule.import", `Imported ${imp.length} rules`); }
-  } catch (e) { log("rule.import", `Failed: ${e}`, "error"); }
+    if ("__TAURI__" in window) { const { importNetshScript } = await import("../hooks/useTauri"); const imp = await importNetshScript(importText.value); refreshRules(); log("rule.import", `Imported ${imp.length} rules`); showToast(`Imported ${imp.length} rules`, "success"); }
+  } catch (e) { log("rule.import", `Failed: ${e}`, "error"); showToast(`Import failed: ${e}`, "error"); }
   showImport.value = false; importText.value = "";
 }
 function handleExport() {
   const json = JSON.stringify({ version: 1, distro: "auto", rules: rules.value }, null, 2);
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([json], { type: "application/json" })); a.download = "wsl-porthole-rules.json"; a.click();
   log("rule.export", "Exported rules as JSON");
+  showToast("Rules exported as JSON", "success");
 }
 async function handleExportPs1() {
   try {
-    let script: string;
-    if ("__TAURI__" in window) {
-      const { exportNetshScript } = await import("../hooks/useTauri");
-      script = await exportNetshScript();
-    } else {
-      script = "# WSL PortHole — demo export\n# Run as Administrator\nnetsh interface portproxy reset\n";
-    }
+    if (!("__TAURI__" in window)) return;
+    const { exportNetshScript } = await import("../hooks/useTauri");
+    const script = await exportNetshScript();
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([script], { type: "text/plain" })); a.download = "wsl-porthole-rules.ps1"; a.click();
     log("rule.export", "Exported rules as .ps1 script");
   } catch (e) { log("rule.export", `Failed: ${e}`, "error"); }
@@ -116,10 +120,10 @@ async function handleExportPs1() {
         Port Rules <span class="text-sm font-normal ml-2" :style="{ color: 'var(--text-secondary)' }">{{ filtered.length }} of {{ rules.length }}</span>
       </h2>
       <div class="flex items-center gap-2">
-        <button @click="showImport = true" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg" :style="{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }"><Upload :size="12" /> Import</button>
-        <button @click="handleExport" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg" :style="{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }"><Download :size="12" /> JSON</button>
-        <button @click="handleExportPs1" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg" :style="{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }"><FileText :size="12" /> .ps1</button>
-        <button @click="editorRule = undefined; showEditor = true" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium" :style="{ background: 'var(--accent)', color: 'var(--bg-primary)' }"><Plus :size="12" /> Add Rule</button>
+        <button @click="showImport = true" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg" :style="{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }" title="Import rules from a netsh portproxy script"><Upload :size="12" /> Import</button>
+        <button @click="handleExport" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg" :style="{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }" title="Export all rules as a JSON file"><Download :size="12" /> JSON</button>
+        <button @click="handleExportPs1" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg" :style="{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }" title="Export rules as a PowerShell netsh script"><FileText :size="12" /> .ps1</button>
+        <button @click="editorRule = undefined; showEditor = true" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium" :style="{ background: 'var(--accent)', color: 'var(--bg-primary)' }" title="Create a new port forwarding rule"><Plus :size="12" /> Add Rule</button>
       </div>
     </div>
 

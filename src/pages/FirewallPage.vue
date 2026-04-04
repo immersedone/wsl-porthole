@@ -8,8 +8,9 @@ const loading = ref(false);
 async function refresh() {
   loading.value = true;
   try {
-    if ("__TAURI__" in window) { const { getFirewallRules } = await import("../hooks/useTauri"); fwRules.value = await getFirewallRules(); }
-    else fwRules.value = ["WSL PortHole: HTTP", "WSL PortHole: HTTPS", "WSL PortHole: SSH", "WSL PortHole: App range", "WSL PortHole WSL→WIN: MCP server-github"];
+    if (!("__TAURI__" in window)) { loading.value = false; return; }
+    const { getFirewallRules } = await import("../hooks/useTauri");
+    fwRules.value = await getFirewallRules();
   } catch (e) { console.error(e); }
   loading.value = false;
 }

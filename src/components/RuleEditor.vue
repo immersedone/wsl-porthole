@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, inject, type Ref } from "vue";
 import { X } from "lucide-vue-next";
 import type { Rule, Direction, PortSpec } from "../types";
 
-const props = defineProps<{ rule?: Rule }>();
+interface RuleGroup { id: string; name: string; ruleIds: string[]; enabled: boolean; startupBehavior: string }
+
+const props = defineProps<{ rule?: Rule; groups?: RuleGroup[] }>();
 const emit = defineEmits<{ save: [data: Partial<Rule>]; cancel: [] }>();
 
 const name = ref(props.rule?.name ?? "");
@@ -20,6 +22,7 @@ const connectAddr = ref(props.rule?.connectAddr ?? "${WSL_IP}");
 const lan = ref(props.rule?.lan ?? true);
 const distro = ref(props.rule?.distro ?? "");
 const note = ref(props.rule?.note ?? "");
+const selectedGroup = ref(props.rule?.group ?? "");
 
 function parsePort(str: string): PortSpec {
   if (str.includes("-")) { const [s, e] = str.split("-").map(Number); return { type: "range", start: s, end: e }; }
@@ -35,6 +38,7 @@ function save() {
     listenPort: parsePort(listenPortStr.value), connectPort: parsePort(connectPortStr.value),
     connectAddr: connectAddr.value, lan: lan.value,
     distro: distro.value || null, note: note.value || null,
+    group: selectedGroup.value || null,
     enabled: props.rule?.enabled ?? true, source: props.rule?.source ?? "manual",
   });
 }
@@ -90,9 +94,18 @@ const inputStyle = { background: "var(--bg-tertiary)", color: "var(--text-primar
             </label>
           </div>
         </div>
-        <div>
-          <label class="block text-xs mb-1 font-medium" :style="{ color: 'var(--text-secondary)' }">Note (optional)</label>
-          <input v-model="note" placeholder="Optional description" class="w-full px-3 py-1.5 text-sm rounded-lg outline-none" :style="inputStyle" />
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs mb-1 font-medium" :style="{ color: 'var(--text-secondary)' }">Group (optional)</label>
+            <select v-model="selectedGroup" class="w-full px-3 py-1.5 text-sm rounded-lg outline-none" :style="inputStyle">
+              <option value="">No group</option>
+              <option v-for="g in (groups ?? [])" :key="g.id" :value="g.id">{{ g.name }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs mb-1 font-medium" :style="{ color: 'var(--text-secondary)' }">Note (optional)</label>
+            <input v-model="note" placeholder="Optional description" class="w-full px-3 py-1.5 text-sm rounded-lg outline-none" :style="inputStyle" />
+          </div>
         </div>
         <div class="text-[11px] font-mono p-2 rounded" :style="{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }">
           netsh interface portproxy add v4tov4 listenport={{ listenPortStr || "?" }} listenaddress={{ lan ? "0.0.0.0" : "127.0.0.1" }} connectport={{ connectPortStr || "?" }} connectaddress={{ connectAddr }}

@@ -58,28 +58,22 @@ function toWslconfig(): string {
 
 async function load() {
   loading.value = true;
-  if (isTauri) {
-    try {
-      const { readWslconfig } = await import("../hooks/useTauri");
-      rawContent.value = await readWslconfig();
-      entries.value = parseWslconfig(rawContent.value);
-    } catch { entries.value = defaultEntries; }
-  } else {
-    entries.value = defaultEntries;
-  }
+  if (!isTauri) { loading.value = false; return; }
+  try {
+    const { readWslconfig } = await import("../hooks/useTauri");
+    rawContent.value = await readWslconfig();
+    entries.value = parseWslconfig(rawContent.value);
+  } catch { entries.value = defaultEntries; }
   loading.value = false;
 }
 
 async function save() {
-  if (isTauri) {
-    try {
-      const { writeWslconfig } = await import("../hooks/useTauri");
-      await writeWslconfig(toWslconfig());
-      log("wslconfig.save", "Saved .wslconfig");
-    } catch (e) { log("wslconfig.save", `Failed: ${e}`, "error"); }
-  } else {
-    log("wslconfig.save", "Saved .wslconfig (demo mode)");
-  }
+  if (!isTauri) return;
+  try {
+    const { writeWslconfig } = await import("../hooks/useTauri");
+    await writeWslconfig(toWslconfig());
+    log("wslconfig.save", "Saved .wslconfig");
+  } catch (e) { log("wslconfig.save", `Failed: ${e}`, "error"); }
 }
 
 onMounted(load);

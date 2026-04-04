@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import {
   Network, FolderOpen, Container, Radio, Globe, Shield, Server,
-  Zap, HardDrive, FileText, BookOpen, Palette, Settings,
+  Zap, HardDrive, FileText, BookOpen, Palette, Settings, Download,
 } from "lucide-vue-next";
 import type { Component } from "vue";
 import type { Page, StatusInfo } from "../types";
@@ -10,22 +10,23 @@ import type { Page, StatusInfo } from "../types";
 defineProps<{ activePage: Page; status: StatusInfo | null }>();
 const emit = defineEmits<{ navigate: [page: Page] }>();
 
-interface NavItem { page: Page; label: string; icon: Component; section?: string }
+interface NavItem { page: Page; label: string; icon: Component; section?: string; tooltip?: string }
 
 const navItems: NavItem[] = [
-  { page: "rules", label: "Port Rules", icon: Network, section: "Manage" },
-  { page: "groups", label: "Groups", icon: FolderOpen },
-  { page: "docker", label: "Docker Sync", icon: Container },
-  { page: "mcp", label: "MCP Servers", icon: Radio },
-  { page: "lan", label: "LAN Access", icon: Globe, section: "Network" },
-  { page: "firewall", label: "Firewall", icon: Shield },
-  { page: "distros", label: "Distros", icon: Server },
-  { page: "startup", label: "Startup Actions", icon: Zap, section: "System" },
-  { page: "service", label: "Boot Service", icon: HardDrive },
-  { page: "wslconfig", label: ".wslconfig", icon: FileText },
-  { page: "audit", label: "Audit Log", icon: BookOpen },
-  { page: "appearance", label: "Appearance", icon: Palette, section: "Preferences" },
-  { page: "settings", label: "Settings", icon: Settings },
+  { page: "rules", label: "Port Rules", icon: Network, section: "Manage", tooltip: "Manage port forwarding rules" },
+  { page: "groups", label: "Groups", icon: FolderOpen, tooltip: "Group rules into profiles for one-click enable/disable" },
+  { page: "docker", label: "Docker Sync", icon: Container, tooltip: "Discover Docker containers and forward their ports" },
+  { page: "mcp", label: "MCP Servers", icon: Radio, tooltip: "Detect MCP servers on Windows Docker engine" },
+  { page: "lan", label: "LAN Access", icon: Globe, section: "Network", tooltip: "View LAN-accessible rules with QR codes" },
+  { page: "firewall", label: "Firewall", icon: Shield, tooltip: "Windows Defender firewall rules managed by WSL PortHole" },
+  { page: "distros", label: "Distros", icon: Server, tooltip: "Installed WSL distributions and their status" },
+  { page: "startup", label: "Startup Actions", icon: Zap, section: "System", tooltip: "Commands to run on WSL startup" },
+  { page: "service", label: "Boot Service", icon: HardDrive, tooltip: "Install and manage the WSL PortHole Windows Service" },
+  { page: "wslconfig", label: ".wslconfig", icon: FileText, tooltip: "Inspect and edit WSL configuration" },
+  { page: "audit", label: "Audit Log", icon: BookOpen, tooltip: "Event log of rule changes and service events" },
+  { page: "appearance", label: "Appearance", icon: Palette, section: "Preferences", tooltip: "Theme selection and customization" },
+  { page: "updates", label: "Updates", icon: Download, tooltip: "Check for and install app updates" },
+  { page: "settings", label: "Settings", icon: Settings, tooltip: "Application preferences and configuration" },
 ];
 
 // Computed section breaks — no side effects during render
@@ -52,7 +53,8 @@ const navWithSections = computed(() => {
           :style="{ color: 'var(--text-secondary)' }">{{ item.section }}</div>
         <button @click="emit('navigate', item.page)"
           class="w-full flex items-center gap-2.5 px-4 py-1.5 text-sm transition-colors"
-          :style="{ color: activePage === item.page ? 'var(--accent)' : 'var(--text-secondary)', background: activePage === item.page ? 'var(--bg-tertiary)' : 'transparent' }">
+          :style="{ color: activePage === item.page ? 'var(--accent)' : 'var(--text-secondary)', background: activePage === item.page ? 'var(--bg-tertiary)' : 'transparent' }"
+          :title="item.tooltip">
           <component :is="item.icon" :size="15" />
           <span>{{ item.label }}</span>
         </button>

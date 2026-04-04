@@ -3,7 +3,7 @@
 > **Complete context document for WSL PortHole.**
 > Covers architecture, decisions, feature list, and roadmap.
 >
-> Last updated: 2026-04-03
+> Last updated: 2026-04-04
 
 ---
 
@@ -106,18 +106,21 @@ wsl-porthole/
 │   ├── App.vue                          ← root layout + page routing
 │   ├── types.ts                         ← TypeScript type definitions
 │   ├── styles/globals.css               ← Tailwind + CSS variables
-│   ├── hooks/
-│   │   ├── useTauri.ts                  ← Tauri invoke wrappers
-│   │   ├── useTheme.ts                  ← theme persistence + application
-│   │   └── useAuditLog.ts              ← in-memory audit log
 │   ├── themes/
 │   │   └── themes.ts                    ← 13 built-in themes (11 tokens each)
 │   ├── components/
-│   │   ├── SidebarNav.vue               ← navigation sidebar (13 pages)
+│   │   ├── SidebarNav.vue               ← navigation sidebar (14 pages)
 │   │   ├── StatusBar.vue                ← persistent bottom status bar
 │   │   ├── FilterBar.vue                ← multi-filter bar
 │   │   ├── RuleCard.vue                 ← rule list item + context menu
-│   │   └── RuleEditor.vue               ← add/edit rule modal
+│   │   ├── RuleEditor.vue               ← add/edit rule modal
+│   │   ├── ToastContainer.vue           ← toast notification overlay
+│   │   └── QrCode.vue                   ← QR code canvas renderer
+│   ├── hooks/
+│   │   ├── useTauri.ts                  ← Tauri invoke wrappers
+│   │   ├── useTheme.ts                  ← theme persistence + application
+│   │   ├── useAuditLog.ts               ← in-memory audit log
+│   │   └── useToast.ts                  ← toast notification system
 │   └── pages/
 │       ├── RulesPage.vue                ← main rule list + CRUD
 │       ├── GroupsPage.vue               ← rule groups / profiles
@@ -131,6 +134,7 @@ wsl-porthole/
 │       ├── WslConfigPage.vue            ← .wslconfig inspector
 │       ├── AuditLogPage.vue             ← event log + export
 │       ├── AppearancePage.vue           ← 13-theme selector + token preview
+│       ├── UpdatesPage.vue              ← app update checker
 │       └── SettingsPage.vue             ← app settings
 │
 ├── docs/
@@ -328,6 +332,7 @@ All `listenAddr=0.0.0.0` (LAN visible), `connectAddr=${WSL_IP}`.
 - [x] .wslconfig inspector
 - [x] Audit log
 - [x] Appearance (themes)
+- [x] Updates (check for updates)
 - [x] Settings
 
 ### System tray
@@ -339,6 +344,8 @@ All `listenAddr=0.0.0.0` (LAN visible), `connectAddr=${WSL_IP}`.
 ### Groups / profiles
 - [x] Named groups (e.g. "Django stack" = 8000+5432+6379)
 - [x] One-click enable/disable group
+- [x] Edit group name inline
+- [x] Assign/remove rules from groups via checklist UI
 - [ ] Tray quick-toggle per group — requires tray plugin
 - [x] Per-group startup behaviour
 - [ ] Import/export groups
@@ -576,6 +583,7 @@ After running once, rules auto-update on every WSL restart forever.
 
 | Version | Date | Notes |
 |---|---|---|
+| 0.4.0 | 2026-04-04 | UX overhaul: toast notifications, tooltips, hover states, Updates page, group editing with rule assignment, Docker engine auto-switch, distro resource stats, StatusBar enhancements, demo data removed, dropdown alignment fix |
 | 0.3.0 | 2026-04-03 | Real QR codes, settings/groups/startup persistence, custom theme editor, .wslconfig write, distro aliases, keyboard shortcuts, Docker engine toggle, duplicate tray icon fix |
 | 0.2.0 | 2026-04-03 | Hyper-V event subscription, system tray, auto-updater |
 | 0.1.0-alpha | 2026-04-03 | Initial release — full core library, Windows Service, Tauri GUI with 13 pages and 13 themes, NSIS/MSI installers |

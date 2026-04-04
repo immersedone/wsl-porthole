@@ -110,4 +110,5 @@ export type Page =
   | "wslconfig"
   | "audit"
   | "appearance"
+  | "updates"
   | "settings";

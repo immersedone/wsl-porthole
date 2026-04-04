@@ -7,8 +7,8 @@ const { log } = useAuditLog();
 const svcStatus = ref<"running" | "stopped" | "not_installed" | "loading">("loading");
 
 async function refresh() {
-  if ("__TAURI__" in window) { try { const { getServiceStatus } = await import("../hooks/useTauri"); svcStatus.value = (await getServiceStatus()) as any; } catch { svcStatus.value = "not_installed"; } }
-  else svcStatus.value = "running";
+  if (!("__TAURI__" in window)) { svcStatus.value = "not_installed"; return; }
+  try { const { getServiceStatus } = await import("../hooks/useTauri"); svcStatus.value = (await getServiceStatus()) as any; } catch { svcStatus.value = "not_installed"; }
 }
 onMounted(refresh);
 

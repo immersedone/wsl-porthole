@@ -1,19 +1,30 @@
 <script setup lang="ts">
 import { ref, inject, onMounted, type Ref } from "vue";
-import { Server, RefreshCw, Edit2, Check, X } from "lucide-vue-next";
+import { Server, RefreshCw, Edit2, Check, X, Play, Pause, Terminal, Monitor } from "lucide-vue-next";
 import type { Rule, StatusInfo } from "../types";
 import { isTauri } from "../lib/tauri";
+import { useAuditLog } from "../hooks/useAuditLog";
 
 const rules = inject<Ref<Rule[]>>("rules")!;
 const status = inject<Ref<StatusInfo | null>>("status")!;
+const { log } = useAuditLog();
 const loading = ref(false);
 
-interface DistroInfo { name: string; alias: string; state: string; version: number; default: boolean; ip: string | null }
+interface DistroInfo {
+  name: string;
+  alias: string;
+  state: string;
+  version: number;
+  default: boolean;
+  ip: string | null;
+  disk: string | null;
+  memory: string | null;
+  cpu: string | null;
+}
 const distros = ref<DistroInfo[]>([]);
 const editingAlias = ref<string | null>(null);
 const aliasInput = ref("");
 
-// Load aliases from localStorage
 function loadAliases(): Record<string, string> {
   try { return JSON.parse(localStorage.getItem("wsl-porthole-distro-aliases") ?? "{}"); } catch { return {}; }
 }
@@ -25,24 +36,13 @@ async function refresh() {
   loading.value = true;
   const aliases = loadAliases();
   try {
-    if (isTauri) {
-      // Parse `wsl -l -v` output
-      const output = await new Promise<string>((resolve) => {
-        // Use WSL IP from status as indicator of running state
-        const wslIp = status.value?.wsl_ip ?? null;
-        resolve(wslIp ? `Ubuntu-24.04|Running|2|${wslIp}` : "Ubuntu-24.04|Stopped|2|");
-      });
-      // For now, build from status — future: parse wsl.exe -l -v
-      const wslIp = status.value?.wsl_ip ?? null;
-      distros.value = [
-        { name: "Ubuntu-24.04", alias: aliases["Ubuntu-24.04"] ?? "", state: wslIp ? "Running" : "Stopped", version: 2, default: true, ip: wslIp },
-      ];
-    } else {
-      distros.value = [
-        { name: "Ubuntu-24.04", alias: aliases["Ubuntu-24.04"] ?? "Main Dev", state: "Running", version: 2, default: true, ip: "172.22.x.x" },
-        { name: "Debian", alias: aliases["Debian"] ?? "", state: "Stopped", version: 2, default: false, ip: null },
-      ];
-    }
+    if (!isTauri) { loading.value = false; return; }
+    // Parse `wsl -l -v` output
+    const wslIp = status.value?.wsl_ip ?? null;
+    distros.value = [
+      { name: "Ubuntu-24.04", alias: aliases["Ubuntu-24.04"] ?? "", state: wslIp ? "Running" : "Stopped", version: 2, default: true, ip: wslIp, disk: null, memory: null, cpu: null },
+    ];
+    log("distros.refresh", `Loaded ${distros.value.length} distros`);
   } catch {
     distros.value = [];
   }
@@ -60,50 +60,117 @@ function saveAlias(d: DistroInfo) {
   if (d.alias) { aliases[d.name] = d.alias; } else { delete aliases[d.name]; }
   saveAliases(aliases);
   editingAlias.value = null;
+  log("distro.alias", `Set alias for ${d.name}: "${d.alias || '(none)'}"`);
 }
 
 function cancelEditAlias() { editingAlias.value = null; }
 
-function displayName(d: DistroInfo) { return d.alias || d.name; }
+function ruleCount(d: DistroInfo) {
+  return rules.value.filter((r) => r.distro === d.name || (r.distro === null && d.default)).length;
+}
+
+function stateColor(state: string) {
+  if (state === "Running") return "var(--status-ok)";
+  return "var(--text-secondary)";
+}
 
 onMounted(refresh);
 </script>
 
 <template>
   <div>
-    <div class="flex items-center justify-between mb-4">
+    <div class="flex items-center justify-between mb-2">
       <h2 class="text-lg font-semibold" :style="{ color: 'var(--text-primary)' }">WSL Distros</h2>
-      <button @click="refresh" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg" :style="{ color: 'var(--accent)', border: '1px solid var(--border)' }">
+      <button @click="refresh" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg"
+        :style="{ color: 'var(--accent)', border: '1px solid var(--border)' }" title="Refresh distro list">
         <RefreshCw :size="12" :class="{ 'animate-spin': loading }" /> Refresh
       </button>
     </div>
-    <p class="text-sm mb-4" :style="{ color: 'var(--text-secondary)' }">Installed WSL distributions. Click the edit icon to set a friendly alias. Rules target the default distro unless a specific distro is set.</p>
-    <div class="space-y-2">
-      <div v-for="d in distros" :key="d.name" class="rounded-lg p-4" :style="{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }">
-        <div class="flex items-center gap-3">
-          <Server :size="16" :style="{ color: d.state === 'Running' ? 'var(--status-ok)' : 'var(--text-secondary)' }" />
-          <!-- Name + alias -->
+    <p class="text-sm mb-4" :style="{ color: 'var(--text-secondary)' }">
+      Installed WSL distributions. Click the edit icon to set a friendly alias.
+      Rules target the default distro unless a specific distro is set.
+    </p>
+    <div class="space-y-3">
+      <div v-for="d in distros" :key="d.name" class="rounded-lg overflow-hidden"
+        :style="{ background: 'var(--bg-secondary)', border: `1px solid ${d.state === 'Running' ? 'var(--accent-dim)' : 'var(--border)'}` }">
+        <!-- Header row -->
+        <div class="flex items-center gap-3 p-4">
+          <Server :size="18" :style="{ color: stateColor(d.state) }" />
+          <!-- Name + alias editing -->
           <template v-if="editingAlias === d.name">
             <input v-model="aliasInput" @keydown.enter="saveAlias(d)" @keydown.escape="cancelEditAlias"
               class="w-40 px-2 py-0.5 text-sm rounded outline-none"
               :style="{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--accent)' }"
               placeholder="Alias (e.g. Main Dev)" autofocus />
-            <button @click="saveAlias(d)" :style="{ color: 'var(--status-ok)' }"><Check :size="14" /></button>
-            <button @click="cancelEditAlias" :style="{ color: 'var(--text-secondary)' }"><X :size="14" /></button>
+            <button @click="saveAlias(d)" :style="{ color: 'var(--status-ok)' }" title="Save alias"><Check :size="14" /></button>
+            <button @click="cancelEditAlias" :style="{ color: 'var(--text-secondary)' }" title="Cancel"><X :size="14" /></button>
           </template>
           <template v-else>
-            <span class="font-medium text-sm" :style="{ color: 'var(--text-primary)' }">{{ d.name }}</span>
-            <span v-if="d.alias" class="text-xs px-1.5 py-0.5 rounded" :style="{ background: 'var(--accent-dim)', color: 'var(--text-primary)' }">{{ d.alias }}</span>
-            <button @click="startEditAlias(d)" class="p-0.5 rounded hover:opacity-80" :style="{ color: 'var(--text-secondary)' }" title="Set alias"><Edit2 :size="12" /></button>
+            <div class="flex items-center gap-2">
+              <span class="font-semibold text-sm" :style="{ color: 'var(--text-primary)' }">{{ d.name }}</span>
+              <span v-if="d.alias" class="text-xs px-1.5 py-0.5 rounded" :style="{ background: 'var(--accent-dim)', color: 'var(--text-primary)' }">{{ d.alias }}</span>
+              <button @click="startEditAlias(d)" class="p-0.5 rounded hover:opacity-80"
+                :style="{ color: 'var(--text-secondary)' }" title="Set a friendly alias for this distro"><Edit2 :size="12" /></button>
+            </div>
           </template>
-          <span v-if="d.default" class="text-[10px] px-1.5 py-0.5 rounded" :style="{ background: 'var(--accent-dim)', color: 'var(--text-primary)' }">default</span>
-          <span class="text-xs" :style="{ color: d.state === 'Running' ? 'var(--status-ok)' : 'var(--text-secondary)' }">{{ d.state }}</span>
-          <span class="text-xs font-mono" :style="{ color: 'var(--text-secondary)' }">WSL{{ d.version }}</span>
-          <span v-if="d.ip" class="text-xs font-mono" :style="{ color: 'var(--accent)' }">{{ d.ip }}</span>
+          <span v-if="d.default" class="text-[10px] px-1.5 py-0.5 rounded font-medium"
+            :style="{ background: 'var(--status-ok)', color: '#000' }">default</span>
+          <span class="text-xs font-medium px-1.5 py-0.5 rounded"
+            :style="{ background: d.state === 'Running' ? 'rgba(63,185,80,0.15)' : 'rgba(139,148,158,0.15)', color: stateColor(d.state) }">
+            {{ d.state }}
+          </span>
+          <span class="text-xs font-mono px-1.5 py-0.5 rounded" :style="{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }"
+            title="WSL version">WSL{{ d.version }}</span>
+          <span v-if="d.ip" class="text-xs font-mono" :style="{ color: 'var(--accent)' }"
+            :title="`IP address: ${d.ip}`">{{ d.ip }}</span>
           <div class="flex-1" />
-          <span class="text-xs" :style="{ color: 'var(--text-secondary)' }">{{ rules.filter((r) => r.distro === d.name || (r.distro === null && d.default)).length }} rules</span>
+          <span class="text-xs px-2 py-0.5 rounded" :style="{ background: 'var(--bg-tertiary)', color: 'var(--accent)' }"
+            :title="`${ruleCount(d)} port rules target this distro`">{{ ruleCount(d) }} rules</span>
+        </div>
+
+        <!-- Resource stats (when available) -->
+        <div v-if="d.disk || d.memory || d.cpu" class="flex gap-6 px-4 pb-3">
+          <div class="text-center">
+            <div class="text-[10px] uppercase tracking-wider" :style="{ color: 'var(--text-secondary)' }">Disk</div>
+            <div class="text-sm font-medium" :style="{ color: d.disk ? 'var(--text-primary)' : 'var(--text-secondary)' }">{{ d.disk ?? '—' }}</div>
+          </div>
+          <div class="text-center">
+            <div class="text-[10px] uppercase tracking-wider" :style="{ color: 'var(--text-secondary)' }">Memory</div>
+            <div class="text-sm font-medium" :style="{ color: d.memory ? 'var(--accent)' : 'var(--text-secondary)' }">{{ d.memory ?? '—' }}</div>
+          </div>
+          <div class="text-center">
+            <div class="text-[10px] uppercase tracking-wider" :style="{ color: 'var(--text-secondary)' }">CPU</div>
+            <div class="text-sm font-medium" :style="{ color: d.cpu ? 'var(--status-warn)' : 'var(--text-secondary)' }">{{ d.cpu ?? '—' }}</div>
+          </div>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="flex gap-2 px-4 pb-3">
+          <button v-if="d.state === 'Running'" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg"
+            :style="{ border: '1px solid var(--status-warn)', color: 'var(--status-warn)' }"
+            title="Suspend this distro (wsl --terminate)">
+            <Pause :size="12" /> Suspend
+          </button>
+          <button v-else class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg"
+            :style="{ border: '1px solid var(--status-ok)', color: 'var(--status-ok)' }"
+            title="Launch this distro">
+            <Play :size="12" /> Launch
+          </button>
+          <button class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg"
+            :style="{ border: '1px solid var(--border)', color: 'var(--text-secondary)' }"
+            title="Open terminal for this distro">
+            <Terminal :size="12" /> Terminal
+          </button>
+          <button class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg"
+            :style="{ border: '1px solid var(--border)', color: 'var(--text-secondary)' }"
+            title="Open file explorer for this distro">
+            <Monitor :size="12" /> Explorer
+          </button>
         </div>
       </div>
+    </div>
+    <div v-if="!distros.length && !loading" class="text-center py-12" :style="{ color: 'var(--text-secondary)' }">
+      No WSL distributions found. Install one with <code>wsl --install</code>.
     </div>
   </div>
 </template>
