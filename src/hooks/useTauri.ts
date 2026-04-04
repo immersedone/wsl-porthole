@@ -61,3 +61,6 @@ export const getServiceStatus = () => invoke<string>("get_service_status");
 
 // Updates
 export const checkForAppUpdates = () => invoke<string | null>("check_for_app_updates");
+
+// Diagnostics
+export const diagnose = () => invoke<any>("diagnose");

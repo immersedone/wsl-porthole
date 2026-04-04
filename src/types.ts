@@ -37,6 +37,9 @@ export interface StatusInfo {
   active_rules: number;
   lan_rules: number;
   total_rules: number;
+  wsl_error: string | null;
+  host_error: string | null;
+  config_dir: string | null;
 }
 
 export interface ActiveProxy {

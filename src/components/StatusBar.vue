@@ -38,7 +38,7 @@ function conflictCount() {
     :style="{ background: 'var(--bg-tertiary)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }">
     <!-- Service status -->
     <div class="flex items-center gap-1.5 cursor-help"
-      :title="status?.wsl_ip ? 'Service: connected — WSL IP detected' : 'Service: disconnected — no WSL IP detected'">
+      :title="status?.wsl_ip ? 'Service: connected — WSL IP detected' : `Disconnected: ${status?.wsl_error ?? 'WSL IP not detected'}`">
       <span class="w-2 h-2 rounded-full"
         :style="{ background: status?.wsl_ip ? 'var(--status-ok)' : 'var(--status-err)' }" />
       <span>{{ status?.wsl_ip ? 'Connected' : 'Disconnected' }}</span>

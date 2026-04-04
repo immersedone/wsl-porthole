@@ -6,16 +6,28 @@ use wsl_porthole_core::config::{self, RuleConfig};
 use wsl_porthole_core::rules::{Direction, Rule};
 use wsl_porthole_core::settings::{self, AppSettings};
 
+/// Stable config directory: %APPDATA%\WSL PortHole\ on Windows.
+/// Never uses current_dir() which is unpredictable for GUI apps.
+fn app_data_dir() -> PathBuf {
+    let base = dirs::data_dir()
+        .unwrap_or_else(|| dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")));
+    let dir = base.join("WSL PortHole");
+    if !dir.exists() {
+        let _ = std::fs::create_dir_all(&dir);
+    }
+    dir
+}
+
 fn config_path() -> PathBuf {
-    dirs_or_cwd().join("wsl-porthole-rules.json")
+    app_data_dir().join("wsl-porthole-rules.json")
 }
 
 fn settings_path() -> PathBuf {
-    dirs_or_cwd().join("wsl-porthole-settings.json")
+    app_data_dir().join("wsl-porthole-settings.json")
 }
 
-fn dirs_or_cwd() -> PathBuf {
-    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+fn log_path() -> PathBuf {
+    app_data_dir().join("wsl-porthole.log")
 }
 
 // ---------- Rule CRUD ----------
@@ -147,18 +159,28 @@ pub struct StatusInfo {
     active_rules: usize,
     lan_rules: usize,
     total_rules: usize,
+    wsl_error: Option<String>,
+    host_error: Option<String>,
+    config_dir: String,
 }
 
 #[tauri::command]
 pub fn get_status() -> Result<StatusInfo, String> {
     let cfg = config::load_rules(&config_path()).map_err(|e| e.to_string())?;
+
+    let wsl_result = wsl_porthole_core::ip::detect_wsl_ip();
+    let host_result = wsl_porthole_core::ip::detect_host_ip();
+
     Ok(StatusInfo {
-        wsl_ip: wsl_porthole_core::ip::detect_wsl_ip().ok(),
-        host_ip: wsl_porthole_core::ip::detect_host_ip().ok(),
+        wsl_ip: wsl_result.as_ref().ok().cloned(),
+        host_ip: host_result.as_ref().ok().cloned(),
         host_gw: wsl_porthole_core::ip::detect_host_gateway().ok(),
         active_rules: cfg.rules.iter().filter(|r| r.enabled).count(),
         lan_rules: cfg.rules.iter().filter(|r| r.enabled && r.lan).count(),
         total_rules: cfg.rules.len(),
+        wsl_error: wsl_result.err().map(|e| e.to_string()),
+        host_error: host_result.err().map(|e| e.to_string()),
+        config_dir: app_data_dir().to_string_lossy().to_string(),
     })
 }
 
@@ -173,6 +195,77 @@ pub fn detect_ips() -> serde_json::Value {
 
 #[tauri::command]
 pub fn sync_now() -> Result<String, String> { apply_rules() }
+
+// ---------- Diagnostics ----------
+
+#[tauri::command]
+pub fn diagnose() -> serde_json::Value {
+    use std::process::Command;
+    use wsl_porthole_core::sys_path;
+
+    let wsl_path = sys_path::wsl();
+    let wsl_exists = std::path::Path::new(wsl_path).exists();
+    let wsl_test = Command::new(wsl_path).arg("--version").output();
+    let wsl_version = match &wsl_test {
+        Ok(o) if o.status.success() => {
+            let raw = &o.stdout;
+            // Try UTF-16LE then UTF-8
+            let text = if raw.len() >= 2 {
+                let u16s: Vec<u16> = raw.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+                String::from_utf16(&u16s).unwrap_or_else(|_| String::from_utf8_lossy(raw).to_string())
+            } else {
+                String::from_utf8_lossy(raw).to_string()
+            };
+            text.trim().to_string()
+        }
+        Ok(o) => format!("exit code: {}, stderr: {}", o.status, String::from_utf8_lossy(&o.stderr).trim()),
+        Err(e) => format!("failed to execute: {e}"),
+    };
+
+    let netsh_path = sys_path::netsh();
+    let netsh_exists = std::path::Path::new(netsh_path).exists();
+
+    let ps_path = sys_path::powershell();
+    let ps_exists = std::path::Path::new(ps_path).exists();
+
+    let docker_test = tokio::runtime::Handle::try_current()
+        .map(|_| "async runtime available".to_string())
+        .unwrap_or_else(|_| "no async runtime".to_string());
+
+    let sc_path = sys_path::sc();
+    let service_test = Command::new(sc_path).args(["query", "WslPortHole"]).output();
+    let service_status = match &service_test {
+        Ok(o) => {
+            let stdout = String::from_utf8_lossy(&o.stdout);
+            if stdout.contains("RUNNING") { "running".to_string() }
+            else if stdout.contains("STOPPED") { "stopped".to_string() }
+            else { format!("unknown: {}", stdout.trim()) }
+        }
+        Err(e) => format!("query failed: {e}"),
+    };
+
+    serde_json::json!({
+        "config_dir": app_data_dir().to_string_lossy(),
+        "config_exists": config_path().exists(),
+        "settings_exists": settings_path().exists(),
+        "wsl": {
+            "path": wsl_path,
+            "exists": wsl_exists,
+            "version": wsl_version,
+        },
+        "netsh": {
+            "path": netsh_path,
+            "exists": netsh_exists,
+        },
+        "powershell": {
+            "path": ps_path,
+            "exists": ps_exists,
+        },
+        "docker": docker_test,
+        "service": service_status,
+        "log_file": log_path().to_string_lossy(),
+    })
+}
 
 // ---------- Import / Export ----------
 

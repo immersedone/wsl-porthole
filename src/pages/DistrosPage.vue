@@ -11,6 +11,7 @@ const status = inject<Ref<StatusInfo | null>>("status")!;
 const { log } = useAuditLog();
 const { show: showToast } = useToast();
 const loading = ref(false);
+const loadError = ref<string | null>(null);
 
 interface DistroInfo {
   name: string;
@@ -49,7 +50,7 @@ async function refresh() {
     log("distros.refresh", `Loaded ${distros.value.length} distros`);
   } catch (e) {
     console.error("Failed to list distros:", e);
-    showToast(`Failed to list distros: ${e}`, "error");
+    loadError.value = String(e);
     distros.value = [];
   }
   loading.value = false;
@@ -136,7 +137,11 @@ onMounted(refresh);
         </div>
       </div>
     </div>
-    <div v-if="!distros.length && !loading" class="text-center py-12" :style="{ color: 'var(--text-secondary)' }">
+    <div v-if="loadError" class="rounded-lg p-4 mb-4" :style="{ background: 'rgba(248,81,73,0.1)', border: '1px solid var(--status-err)' }">
+      <p class="text-sm font-medium mb-1" :style="{ color: 'var(--status-err)' }">Failed to detect WSL distributions</p>
+      <p class="text-xs font-mono" :style="{ color: 'var(--text-secondary)' }">{{ loadError }}</p>
+    </div>
+    <div v-else-if="!distros.length && !loading" class="text-center py-12" :style="{ color: 'var(--text-secondary)' }">
       No WSL distributions found. Install one with <code>wsl --install</code>.
     </div>
   </div>

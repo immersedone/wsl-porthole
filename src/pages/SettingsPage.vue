@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from "vue";
-import { Info } from "lucide-vue-next";
+import { Info, Bug } from "lucide-vue-next";
 import { isTauri } from "../lib/tauri";
 
 declare const __APP_VERSION__: string;
@@ -14,6 +14,8 @@ const pollingInterval = ref(30);
 const defaultListenAddr = ref("0.0.0.0");
 const toastOnIpChange = ref(true);
 const toastOnConflict = ref(true);
+const diagResult = ref<any>(null);
+const diagLoading = ref(false);
 
 async function loadSettings() {
   if (isTauri) {
@@ -57,6 +59,16 @@ async function persist() {
     };
     await saveSettings(s);
   } catch {}
+}
+
+async function runDiagnostics() {
+  if (!isTauri) return;
+  diagLoading.value = true;
+  try {
+    const { diagnose } = await import("../hooks/useTauri");
+    diagResult.value = await diagnose();
+  } catch (e) { diagResult.value = { error: String(e) }; }
+  diagLoading.value = false;
 }
 
 onMounted(loadSettings);
@@ -124,6 +136,18 @@ watch([startMinimized, minimizeToTray, healthCheckInterval, ipSettleDelay, polli
           <p><strong>WSL PortHole</strong> v{{ appVersion }}</p>
           <p>Manages port forwarding and firewall rules across Windows, WSL2, and Docker.</p>
           <p>Built with Tauri v2 + Vue 3 + Rust</p>
+        </div>
+      </div>
+      <!-- Diagnostics -->
+      <div class="rounded-lg overflow-hidden" :style="{ border: '1px solid var(--border)' }">
+        <div class="px-4 py-2 text-xs font-semibold uppercase tracking-wider flex items-center justify-between" :style="{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }">
+          <span>Diagnostics</span>
+          <button @click="runDiagnostics" class="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded" :style="{ color: 'var(--accent)', border: '1px solid var(--border)' }">
+            <Bug :size="10" /> {{ diagLoading ? 'Running...' : 'Run diagnostics' }}
+          </button>
+        </div>
+        <div v-if="diagResult" class="p-4 text-xs font-mono overflow-x-auto" :style="{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }">
+          <pre>{{ JSON.stringify(diagResult, null, 2) }}</pre>
         </div>
       </div>
     </div>
