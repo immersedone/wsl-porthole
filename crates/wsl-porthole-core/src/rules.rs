@@ -11,10 +11,12 @@ pub enum Direction {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(untagged)]
+#[serde(tag = "type", rename_all = "camelCase")]
 pub enum PortSpec {
-    Single(u16),
-    Range(u16, u16),
+    #[serde(rename = "single")]
+    Single { port: u16 },
+    #[serde(rename = "range")]
+    Range { start: u16, end: u16 },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -51,8 +53,8 @@ impl Rule {
             name: name.into(),
             direction,
             listen_addr: "0.0.0.0".into(),
-            listen_port: PortSpec::Single(listen_port),
-            connect_port: PortSpec::Single(connect_port),
+            listen_port: PortSpec::Single { port: listen_port },
+            connect_port: PortSpec::Single { port: connect_port },
             connect_addr: "${WSL_IP}".into(),
             distro: None,
             lan: true,
@@ -69,7 +71,7 @@ impl Rule {
 
     /// Returns true if this is a port range rule.
     pub fn is_range(&self) -> bool {
-        matches!(self.listen_port, PortSpec::Range(_, _))
+        matches!(self.listen_port, PortSpec::Range { .. })
     }
 }
 
@@ -84,13 +86,6 @@ pub struct ResolveContext<'a> {
 }
 
 /// Resolve address template variables in a connect_addr string.
-///
-/// Supported variables:
-/// - `${WSL_IP}` — default WSL distro IP
-/// - `${WSL_IP:DistroName}` — IP of a specific distro
-/// - `${HOST_IP}` — Windows host LAN IP
-/// - `${HOST_GW}` — WSL→Windows gateway IP
-/// - `${DISTRO_NAME}` — active distro name
 pub fn resolve_addr(template: &str, ctx: &ResolveContext<'_>) -> String {
     let mut result = template.to_string();
 
@@ -129,8 +124,8 @@ pub fn resolve_addr_simple(template: &str, wsl_ip: &str, host_gw: &str) -> Strin
 /// Expand a PortSpec into individual port numbers.
 pub fn expand_ports(spec: &PortSpec) -> Vec<u16> {
     match spec {
-        PortSpec::Single(p) => vec![*p],
-        PortSpec::Range(s, e) => (*s..=*e).collect(),
+        PortSpec::Single { port } => vec![*port],
+        PortSpec::Range { start, end } => (*start..=*end).collect(),
     }
 }
 
@@ -140,25 +135,19 @@ mod tests {
 
     #[test]
     fn test_expand_single() {
-        assert_eq!(expand_ports(&PortSpec::Single(8080)), vec![8080]);
+        assert_eq!(expand_ports(&PortSpec::Single { port: 8080 }), vec![8080]);
     }
 
     #[test]
     fn test_expand_range() {
-        let ports = expand_ports(&PortSpec::Range(1024, 1028));
+        let ports = expand_ports(&PortSpec::Range { start: 1024, end: 1028 });
         assert_eq!(ports, vec![1024, 1025, 1026, 1027, 1028]);
     }
 
     #[test]
     fn test_resolve_addr_simple() {
-        assert_eq!(
-            resolve_addr_simple("${WSL_IP}", "172.22.1.1", "172.22.0.1"),
-            "172.22.1.1"
-        );
-        assert_eq!(
-            resolve_addr_simple("${HOST_GW}", "172.22.1.1", "172.22.0.1"),
-            "172.22.0.1"
-        );
+        assert_eq!(resolve_addr_simple("${WSL_IP}", "172.22.1.1", "172.22.0.1"), "172.22.1.1");
+        assert_eq!(resolve_addr_simple("${HOST_GW}", "172.22.1.1", "172.22.0.1"), "172.22.0.1");
     }
 
     #[test]
@@ -175,7 +164,6 @@ mod tests {
         assert_eq!(resolve_addr("${HOST_GW}", &ctx), "172.22.0.1");
         assert_eq!(resolve_addr("${DISTRO_NAME}", &ctx), "Ubuntu-24.04");
         assert_eq!(resolve_addr("${WSL_IP:Debian}", &ctx), "172.22.2.2");
-        // Unknown distro falls back to default WSL IP
         assert_eq!(resolve_addr("${WSL_IP:Unknown}", &ctx), "172.22.1.1");
     }
 
@@ -193,22 +181,23 @@ mod tests {
     #[test]
     fn test_rule_remapped() {
         let mut rule = Rule::new("HTTP alt", Direction::WinToWsl, 8080, 80);
-        rule.listen_port = PortSpec::Single(8080);
-        rule.connect_port = PortSpec::Single(80);
+        rule.listen_port = PortSpec::Single { port: 8080 };
+        rule.connect_port = PortSpec::Single { port: 80 };
         assert!(rule.is_remapped());
     }
 
     #[test]
     fn test_portspec_serde_roundtrip() {
-        let single = PortSpec::Single(8080);
+        let single = PortSpec::Single { port: 8080 };
         let json = serde_json::to_string(&single).unwrap();
-        assert_eq!(json, "8080");
+        assert!(json.contains("\"type\":\"single\""));
+        assert!(json.contains("\"port\":8080"));
 
-        let range = PortSpec::Range(1024, 1048);
+        let range = PortSpec::Range { start: 1024, end: 1048 };
         let json = serde_json::to_string(&range).unwrap();
-        assert_eq!(json, "[1024,1048]");
+        assert!(json.contains("\"type\":\"range\""));
 
         let back: PortSpec = serde_json::from_str(&json).unwrap();
-        assert_eq!(back, PortSpec::Range(1024, 1048));
+        assert_eq!(back, PortSpec::Range { start: 1024, end: 1048 });
     }
 }

@@ -55,8 +55,8 @@ pub fn parse_netsh_script(text: &str) -> Vec<Rule> {
                     name,
                     direction: Direction::WinToWsl,
                     listen_addr: la.to_string(),
-                    listen_port: PortSpec::Single(lp),
-                    connect_port: PortSpec::Single(cp),
+                    listen_port: PortSpec::Single { port: lp },
+                    connect_port: PortSpec::Single { port: cp },
                     connect_addr: ca,
                     distro: None,
                     lan: la == "0.0.0.0",
@@ -113,8 +113,8 @@ mod tests {
         let script = "netsh interface portproxy add v4tov4 listenport=80 listenaddress=0.0.0.0 connectport=80 connectaddress=172.22.207.71";
         let rules = parse_netsh_script(script);
         assert_eq!(rules.len(), 1);
-        assert_eq!(rules[0].listen_port, PortSpec::Single(80));
-        assert_eq!(rules[0].connect_port, PortSpec::Single(80));
+        assert_eq!(rules[0].listen_port, PortSpec::Single { port: 80 });
+        assert_eq!(rules[0].connect_port, PortSpec::Single { port: 80 });
         assert_eq!(rules[0].connect_addr, "${WSL_IP}");
         assert_eq!(rules[0].listen_addr, "0.0.0.0");
         assert!(rules[0].lan);
@@ -127,8 +127,8 @@ mod tests {
         let rules = parse_netsh_script(script);
         assert_eq!(rules.len(), 1);
         assert_eq!(rules[0].name, "Imported 8080→80");
-        assert_eq!(rules[0].listen_port, PortSpec::Single(8080));
-        assert_eq!(rules[0].connect_port, PortSpec::Single(80));
+        assert_eq!(rules[0].listen_port, PortSpec::Single { port: 8080 });
+        assert_eq!(rules[0].connect_port, PortSpec::Single { port: 80 });
     }
 
     #[test]
