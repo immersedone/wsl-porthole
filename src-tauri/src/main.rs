@@ -14,6 +14,14 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            // If a second instance is launched, focus the existing window
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
         .setup(|app| {
             // Build tray menu
             let show_i = MenuItem::with_id(app, "show", "Open WSL PortHole", true, None::<&str>)?;
@@ -95,6 +103,7 @@ fn main() {
             commands::check_health,
             commands::detect_conflicts,
             commands::export_netsh_script,
+            commands::list_distros,
             commands::write_hosts_entry,
             commands::inject_env_var,
             commands::get_firewall_rules,

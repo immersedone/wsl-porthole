@@ -187,6 +187,13 @@ pub fn export_netsh_script() -> Result<String, String> {
     Ok(wsl_porthole_core::export::export_netsh_script(&cfg.rules))
 }
 
+// ---------- WSL Distros ----------
+
+#[tauri::command]
+pub fn list_distros() -> Result<Vec<wsl_porthole_core::ip::DistroInfo>, String> {
+    wsl_porthole_core::ip::list_distros().map_err(|e| e.to_string())
+}
+
 // ---------- Docker ----------
 
 #[derive(Serialize)]
@@ -310,7 +317,7 @@ pub fn uninstall_service() -> Result<String, String> {
 
 #[tauri::command]
 pub fn get_service_status() -> Result<String, String> {
-    let output = std::process::Command::new("sc").args(["query", "WslPortHole"]).output().map_err(|e| e.to_string())?;
+    let output = std::process::Command::new(r"C:\Windows\System32\sc.exe").args(["query", "WslPortHole"]).output().map_err(|e| e.to_string())?;
     let stdout = String::from_utf8_lossy(&output.stdout);
     if stdout.contains("RUNNING") { Ok("running".into()) }
     else if stdout.contains("STOPPED") { Ok("stopped".into()) }

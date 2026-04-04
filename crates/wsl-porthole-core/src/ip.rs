@@ -7,6 +7,8 @@
 use anyhow::{anyhow, Result};
 use std::process::Command;
 
+use crate::sys_path;
+
 /// Detect the default WSL distro's IPv4 address.
 pub fn detect_wsl_ip() -> Result<String> {
     detect_wsl_ip_for(None)
@@ -14,7 +16,7 @@ pub fn detect_wsl_ip() -> Result<String> {
 
 /// Detect a specific WSL distro's IPv4 address (or default if `None`).
 pub fn detect_wsl_ip_for(distro: Option<&str>) -> Result<String> {
-    let mut cmd = Command::new("wsl");
+    let mut cmd = Command::new(sys_path::wsl());
     if let Some(d) = distro {
         cmd.args(["-d", d]);
     }
@@ -39,7 +41,7 @@ pub fn detect_wsl_ip_for(distro: Option<&str>) -> Result<String> {
 /// Falls back to parsing `ipconfig` output if PowerShell is unavailable.
 pub fn detect_host_ip() -> Result<String> {
     // Try PowerShell first — most reliable
-    let ps_output = Command::new("powershell")
+    let ps_output = Command::new(sys_path::powershell())
         .args([
             "-NoProfile",
             "-Command",
@@ -56,7 +58,7 @@ pub fn detect_host_ip() -> Result<String> {
     }
 
     // Fallback: parse ipconfig
-    let output = Command::new("ipconfig").output()?;
+    let output = Command::new(sys_path::ipconfig()).output()?;
     let stdout = String::from_utf8_lossy(&output.stdout);
     for line in stdout.lines() {
         let line = line.trim();
@@ -78,7 +80,7 @@ pub fn detect_host_ip() -> Result<String> {
 /// Reads from WSL's `/etc/resolv.conf` nameserver entry, which is
 /// typically the Windows host gateway address.
 pub fn detect_host_gateway() -> Result<String> {
-    let output = Command::new("wsl")
+    let output = Command::new(sys_path::wsl())
         .args(["cat", "/etc/resolv.conf"])
         .output()?;
     if !output.status.success() {
@@ -95,6 +97,89 @@ pub fn detect_host_gateway() -> Result<String> {
         }
     }
     Err(anyhow!("No nameserver IPv4 found in /etc/resolv.conf"))
+}
+
+/// Info about an installed WSL distribution.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct DistroInfo {
+    pub name: String,
+    pub state: String,
+    pub version: u32,
+    pub default: bool,
+    pub ip: Option<String>,
+}
+
+/// List installed WSL distributions by parsing `wsl.exe -l -v`.
+pub fn list_distros() -> Result<Vec<DistroInfo>> {
+    let output = Command::new(sys_path::wsl())
+        .args(["-l", "-v"])
+        .output()?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("wsl -l -v failed: {stderr}");
+    }
+
+    // wsl.exe outputs UTF-16LE on Windows
+    let stdout = decode_wsl_output(&output.stdout);
+    let mut distros = Vec::new();
+
+    for line in stdout.lines().skip(1) {
+        // Skip empty lines
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        // Lines look like: "* Ubuntu-24.04    Running    2"
+        // or:               "  Debian          Stopped    2"
+        let is_default = line.starts_with('*');
+        let line = line.trim_start_matches('*').trim();
+
+        // Split into parts — name, state, version
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() < 3 {
+            continue;
+        }
+
+        let name = parts[0].to_string();
+        let state = parts[1].to_string();
+        let version: u32 = parts[2].parse().unwrap_or(2);
+
+        // Try to get IP for running distros
+        let ip = if state == "Running" {
+            detect_wsl_ip_for(Some(&name)).ok()
+        } else {
+            None
+        };
+
+        distros.push(DistroInfo {
+            name,
+            state,
+            version,
+            default: is_default,
+            ip,
+        });
+    }
+
+    Ok(distros)
+}
+
+/// Decode wsl.exe output which is UTF-16LE on Windows.
+fn decode_wsl_output(bytes: &[u8]) -> String {
+    // Try UTF-16LE first (Windows wsl.exe output)
+    if bytes.len() >= 2 {
+        // Check for BOM or try to decode as UTF-16LE
+        let u16_iter: Vec<u16> = bytes
+            .chunks_exact(2)
+            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+            .collect();
+        if let Ok(s) = String::from_utf16(&u16_iter) {
+            // Strip BOM if present
+            return s.trim_start_matches('\u{feff}').to_string();
+        }
+    }
+    // Fallback to UTF-8
+    String::from_utf8_lossy(bytes).to_string()
 }
 
 fn is_ipv4(s: &str) -> bool {

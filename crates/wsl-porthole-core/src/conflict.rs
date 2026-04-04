@@ -63,7 +63,7 @@ pub fn detect_conflicts(rules: &[Rule]) -> Result<Vec<Conflict>> {
 
 /// Parse `netstat -anop TCP` output to get TCP listeners in LISTENING state.
 fn get_tcp_listeners() -> Result<Vec<TcpListener>> {
-    let output = Command::new("netstat")
+    let output = Command::new(crate::sys_path::netstat())
         .args(["-anop", "TCP"])
         .output()?;
 
@@ -100,7 +100,7 @@ fn get_process_name(pid: u32) -> String {
         return "System".to_string();
     }
 
-    let output = Command::new("tasklist")
+    let output = Command::new(crate::sys_path::tasklist())
         .args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"])
         .output();
 

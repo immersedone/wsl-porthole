@@ -4,10 +4,12 @@ import { Server, RefreshCw, Edit2, Check, X, Play, Pause, Terminal, Monitor } fr
 import type { Rule, StatusInfo } from "../types";
 import { isTauri } from "../lib/tauri";
 import { useAuditLog } from "../hooks/useAuditLog";
+import { useToast } from "../hooks/useToast";
 
 const rules = inject<Ref<Rule[]>>("rules")!;
 const status = inject<Ref<StatusInfo | null>>("status")!;
 const { log } = useAuditLog();
+const { show: showToast } = useToast();
 const loading = ref(false);
 
 interface DistroInfo {
@@ -17,9 +19,6 @@ interface DistroInfo {
   version: number;
   default: boolean;
   ip: string | null;
-  disk: string | null;
-  memory: string | null;
-  cpu: string | null;
 }
 const distros = ref<DistroInfo[]>([]);
 const editingAlias = ref<string | null>(null);
@@ -37,13 +36,20 @@ async function refresh() {
   const aliases = loadAliases();
   try {
     if (!isTauri) { loading.value = false; return; }
-    // Parse `wsl -l -v` output
-    const wslIp = status.value?.wsl_ip ?? null;
-    distros.value = [
-      { name: "Ubuntu-24.04", alias: aliases["Ubuntu-24.04"] ?? "", state: wslIp ? "Running" : "Stopped", version: 2, default: true, ip: wslIp, disk: null, memory: null, cpu: null },
-    ];
+    const { listDistros } = await import("../hooks/useTauri");
+    const raw = await listDistros();
+    distros.value = raw.map((d) => ({
+      name: d.name,
+      alias: aliases[d.name] ?? "",
+      state: d.state,
+      version: d.version,
+      default: d.default,
+      ip: d.ip,
+    }));
     log("distros.refresh", `Loaded ${distros.value.length} distros`);
-  } catch {
+  } catch (e) {
+    console.error("Failed to list distros:", e);
+    showToast(`Failed to list distros: ${e}`, "error");
     distros.value = [];
   }
   loading.value = false;
@@ -61,6 +67,7 @@ function saveAlias(d: DistroInfo) {
   saveAliases(aliases);
   editingAlias.value = null;
   log("distro.alias", `Set alias for ${d.name}: "${d.alias || '(none)'}"`);
+  showToast(`Alias ${d.alias ? 'set' : 'cleared'} for ${d.name}`, "success");
 }
 
 function cancelEditAlias() { editingAlias.value = null; }
@@ -126,46 +133,6 @@ onMounted(refresh);
           <div class="flex-1" />
           <span class="text-xs px-2 py-0.5 rounded" :style="{ background: 'var(--bg-tertiary)', color: 'var(--accent)' }"
             :title="`${ruleCount(d)} port rules target this distro`">{{ ruleCount(d) }} rules</span>
-        </div>
-
-        <!-- Resource stats (when available) -->
-        <div v-if="d.disk || d.memory || d.cpu" class="flex gap-6 px-4 pb-3">
-          <div class="text-center">
-            <div class="text-[10px] uppercase tracking-wider" :style="{ color: 'var(--text-secondary)' }">Disk</div>
-            <div class="text-sm font-medium" :style="{ color: d.disk ? 'var(--text-primary)' : 'var(--text-secondary)' }">{{ d.disk ?? '—' }}</div>
-          </div>
-          <div class="text-center">
-            <div class="text-[10px] uppercase tracking-wider" :style="{ color: 'var(--text-secondary)' }">Memory</div>
-            <div class="text-sm font-medium" :style="{ color: d.memory ? 'var(--accent)' : 'var(--text-secondary)' }">{{ d.memory ?? '—' }}</div>
-          </div>
-          <div class="text-center">
-            <div class="text-[10px] uppercase tracking-wider" :style="{ color: 'var(--text-secondary)' }">CPU</div>
-            <div class="text-sm font-medium" :style="{ color: d.cpu ? 'var(--status-warn)' : 'var(--text-secondary)' }">{{ d.cpu ?? '—' }}</div>
-          </div>
-        </div>
-
-        <!-- Action buttons -->
-        <div class="flex gap-2 px-4 pb-3">
-          <button v-if="d.state === 'Running'" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg"
-            :style="{ border: '1px solid var(--status-warn)', color: 'var(--status-warn)' }"
-            title="Suspend this distro (wsl --terminate)">
-            <Pause :size="12" /> Suspend
-          </button>
-          <button v-else class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg"
-            :style="{ border: '1px solid var(--status-ok)', color: 'var(--status-ok)' }"
-            title="Launch this distro">
-            <Play :size="12" /> Launch
-          </button>
-          <button class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg"
-            :style="{ border: '1px solid var(--border)', color: 'var(--text-secondary)' }"
-            title="Open terminal for this distro">
-            <Terminal :size="12" /> Terminal
-          </button>
-          <button class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg"
-            :style="{ border: '1px solid var(--border)', color: 'var(--text-secondary)' }"
-            title="Open file explorer for this distro">
-            <Monitor :size="12" /> Explorer
-          </button>
         </div>
       </div>
     </div>

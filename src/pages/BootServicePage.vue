@@ -43,6 +43,15 @@ async function toggleService() {
 }
 
 const statusColor = (s: string) => s === "running" ? "var(--status-ok)" : s === "stopped" ? "var(--status-warn)" : "var(--text-secondary)";
+const statusLabel = (s: string) => {
+  switch (s) {
+    case "running": return "Running";
+    case "stopped": return "Stopped";
+    case "not_installed": return "Not Installed";
+    case "loading": return "...";
+    default: return s;
+  }
+};
 </script>
 
 <template>
@@ -53,7 +62,7 @@ const statusColor = (s: string) => s === "running" ? "var(--status-ok)" : s === 
       <div class="flex items-center gap-3 mb-4">
         <HardDrive :size="20" :style="{ color: statusColor(svcStatus) }" />
         <span class="text-base font-semibold" :style="{ color: 'var(--text-primary)' }">WslPortHole</span>
-        <span class="text-xs px-2 py-0.5 rounded" :style="{ background: statusColor(svcStatus), color: '#000' }">{{ svcStatus === "loading" ? "..." : svcStatus }}</span>
+        <span class="text-xs px-2 py-0.5 rounded" :style="{ background: statusColor(svcStatus), color: '#000' }">{{ statusLabel(svcStatus) }}</span>
         <div class="flex-1" />
         <button @click="refresh" class="p-1" :style="{ color: 'var(--text-secondary)' }"><RefreshCw :size="14" /></button>
       </div>

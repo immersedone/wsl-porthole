@@ -69,7 +69,7 @@ pub fn connect_windows_engine() -> Result<Docker> {
 /// List running containers from a Docker engine connection.
 pub async fn list_containers(docker: &Docker) -> Result<Vec<ContainerInfo>> {
     let options = ListContainersOptions::<String> {
-        all: false, // only running
+        all: true, // include stopped containers
         ..Default::default()
     };
 

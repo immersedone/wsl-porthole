@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, inject, type Ref } from "vue";
+import { ref, onMounted, watch } from "vue";
 import { X } from "lucide-vue-next";
 import type { Rule, Direction, PortSpec } from "../types";
+import { isTauri } from "../lib/tauri";
 
 interface RuleGroup { id: string; name: string; ruleIds: string[]; enabled: boolean; startupBehavior: string }
+interface TargetOption { value: string; label: string; type: "distro" | "docker" }
 
 const props = defineProps<{ rule?: Rule; groups?: RuleGroup[] }>();
 const emit = defineEmits<{ save: [data: Partial<Rule>]; cancel: [] }>();
@@ -20,9 +22,63 @@ const connectPortStr = ref(
 );
 const connectAddr = ref(props.rule?.connectAddr ?? "${WSL_IP}");
 const lan = ref(props.rule?.lan ?? true);
-const distro = ref(props.rule?.distro ?? "");
+const target = ref(props.rule?.distro ?? "");
 const note = ref(props.rule?.note ?? "");
 const selectedGroup = ref(props.rule?.group ?? "");
+
+const targets = ref<TargetOption[]>([]);
+const loadingTargets = ref(false);
+
+async function loadTargets() {
+  loadingTargets.value = true;
+  const result: TargetOption[] = [];
+
+  if (isTauri) {
+    try {
+      const { listDistros } = await import("../hooks/useTauri");
+      const distros = await listDistros();
+      for (const d of distros) {
+        // Skip docker-desktop distro as it's an internal Docker thing
+        if (d.name.toLowerCase() === "docker-desktop" || d.name.toLowerCase() === "docker-desktop-data") continue;
+        const suffix = d.default ? " (default)" : "";
+        const state = d.state === "Running" ? "" : " [stopped]";
+        result.push({ value: d.name, label: `${d.name}${suffix}${state}`, type: "distro" });
+      }
+    } catch (e) { console.error("Failed to load distros:", e); }
+
+    try {
+      const { listDockerContainers } = await import("../hooks/useTauri");
+      const containers = await listDockerContainers("wsl");
+      for (const c of containers) {
+        const state = c.status.startsWith("Up") ? "" : " [stopped]";
+        result.push({ value: `docker:${c.name}`, label: `${c.name}${state}`, type: "docker" });
+      }
+    } catch (e) { console.error("Failed to load containers:", e); }
+  }
+
+  targets.value = result;
+
+  // If editing and target is set, make sure it's in the list
+  if (target.value && !result.find(t => t.value === target.value)) {
+    result.push({ value: target.value, label: target.value, type: "distro" });
+  }
+
+  // Auto-select the default distro if creating new rule and no target set
+  if (!props.rule && !target.value) {
+    const defaultDistro = result.find(t => t.type === "distro" && t.label.includes("(default)"));
+    if (defaultDistro) target.value = defaultDistro.value;
+  }
+
+  loadingTargets.value = false;
+}
+
+onMounted(loadTargets);
+
+// When direction changes, auto-set connect address
+watch(direction, (dir) => {
+  if (dir === "winToWsl") connectAddr.value = "${WSL_IP}";
+  else connectAddr.value = "${HOST_GW}";
+});
 
 function parsePort(str: string): PortSpec {
   if (str.includes("-")) { const [s, e] = str.split("-").map(Number); return { type: "range", start: s, end: e }; }
@@ -30,18 +86,23 @@ function parsePort(str: string): PortSpec {
 }
 
 function save() {
-  if (!name.value.trim() || !listenPortStr.value || !connectPortStr.value) return;
+  if (!name.value.trim() || !listenPortStr.value || !connectPortStr.value || !target.value) return;
+  // Extract distro name (strip docker: prefix for docker targets)
+  const distroValue = target.value.startsWith("docker:") ? null : target.value;
   emit("save", {
     ...(props.rule ? { id: props.rule.id } : {}),
     name: name.value.trim(), direction: direction.value,
     listenAddr: lan.value ? "0.0.0.0" : "127.0.0.1",
     listenPort: parsePort(listenPortStr.value), connectPort: parsePort(connectPortStr.value),
     connectAddr: connectAddr.value, lan: lan.value,
-    distro: distro.value || null, note: note.value || null,
+    distro: distroValue, note: note.value || null,
     group: selectedGroup.value || null,
     enabled: props.rule?.enabled ?? true, source: props.rule?.source ?? "manual",
   });
 }
+
+const distroTargets = () => targets.value.filter(t => t.type === "distro");
+const dockerTargets = () => targets.value.filter(t => t.type === "docker");
 
 const inputStyle = { background: "var(--bg-tertiary)", color: "var(--text-primary)", border: "1px solid var(--border)" };
 </script>
@@ -67,8 +128,17 @@ const inputStyle = { background: "var(--bg-tertiary)", color: "var(--text-primar
             </select>
           </div>
           <div>
-            <label class="block text-xs mb-1 font-medium" :style="{ color: 'var(--text-secondary)' }">Connect address</label>
-            <input v-model="connectAddr" placeholder="${WSL_IP}" class="w-full px-3 py-1.5 text-sm rounded-lg outline-none" :style="inputStyle" />
+            <label class="block text-xs mb-1 font-medium" :style="{ color: 'var(--accent)' }">Target *</label>
+            <select v-model="target" class="w-full px-3 py-1.5 text-sm rounded-lg outline-none" :style="inputStyle"
+              :class="{ 'ring-1 ring-red-500': !target }">
+              <option value="" disabled>Select target...</option>
+              <optgroup v-if="distroTargets().length" label="WSL Distros">
+                <option v-for="t in distroTargets()" :key="t.value" :value="t.value">{{ t.label }}</option>
+              </optgroup>
+              <optgroup v-if="dockerTargets().length" label="Docker Containers">
+                <option v-for="t in dockerTargets()" :key="t.value" :value="t.value">{{ t.label }}</option>
+              </optgroup>
+            </select>
           </div>
         </div>
         <div class="grid grid-cols-2 gap-3">
@@ -83,8 +153,8 @@ const inputStyle = { background: "var(--bg-tertiary)", color: "var(--text-primar
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs mb-1 font-medium" :style="{ color: 'var(--text-secondary)' }">Distro (optional)</label>
-            <input v-model="distro" placeholder="auto" class="w-full px-3 py-1.5 text-sm rounded-lg outline-none" :style="inputStyle" />
+            <label class="block text-xs mb-1 font-medium" :style="{ color: 'var(--text-secondary)' }">Connect address</label>
+            <input v-model="connectAddr" placeholder="${WSL_IP}" class="w-full px-3 py-1.5 text-sm rounded-lg outline-none" :style="inputStyle" />
           </div>
           <div>
             <label class="block text-xs mb-1 font-medium" :style="{ color: 'var(--text-secondary)' }">LAN visible</label>
@@ -113,7 +183,10 @@ const inputStyle = { background: "var(--bg-tertiary)", color: "var(--text-primar
       </div>
       <div class="flex justify-end gap-2 mt-6">
         <button @click="emit('cancel')" class="px-4 py-1.5 text-sm rounded-lg" :style="{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }">Cancel</button>
-        <button @click="save" class="px-4 py-1.5 text-sm rounded-lg font-medium" :style="{ background: 'var(--accent)', color: 'var(--bg-primary)' }">{{ rule ? "Save" : "Add Rule" }}</button>
+        <button @click="save" class="px-4 py-1.5 text-sm rounded-lg font-medium"
+          :style="{ background: (name.trim() && listenPortStr && connectPortStr && target) ? 'var(--accent)' : 'var(--accent-dim)', color: 'var(--bg-primary)' }"
+          :disabled="!name.trim() || !listenPortStr || !connectPortStr || !target"
+          :title="!target ? 'Select a target distro or container' : ''">{{ rule ? "Save" : "Add Rule" }}</button>
       </div>
     </div>
   </div>

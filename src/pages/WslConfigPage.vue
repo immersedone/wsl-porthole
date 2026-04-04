@@ -58,11 +58,13 @@ function toWslconfig(): string {
 
 async function load() {
   loading.value = true;
-  if (!isTauri) { loading.value = false; return; }
+  if (!isTauri) { entries.value = defaultEntries; loading.value = false; return; }
   try {
     const { readWslconfig } = await import("../hooks/useTauri");
     rawContent.value = await readWslconfig();
     entries.value = parseWslconfig(rawContent.value);
+    // If file was empty or didn't exist, show defaults so user can configure
+    if (!entries.value.length) entries.value = defaultEntries;
   } catch { entries.value = defaultEntries; }
   loading.value = false;
 }

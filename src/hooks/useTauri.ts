@@ -27,6 +27,10 @@ export const syncNow = () => invoke<string>("sync_now");
 export const importNetshScript = (script: string) => invoke<Rule[]>("import_netsh_script", { script });
 export const exportNetshScript = () => invoke<string>("export_netsh_script");
 
+// Distros
+export interface DistroInfoBackend { name: string; state: string; version: number; default: boolean; ip: string | null }
+export const listDistros = () => invoke<DistroInfoBackend[]>("list_distros");
+
 // Docker (with engine parameter)
 export const listDockerContainers = (engine?: string) => invoke<ContainerSummary[]>("list_docker_containers", { engine });
 export const detectMcpServers = () => invoke<McpServerInfo[]>("detect_mcp_servers");
