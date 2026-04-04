@@ -2,43 +2,63 @@
 import { ref, onMounted } from "vue";
 import { HardDrive, Play, Square, Download, Trash2, RefreshCw } from "lucide-vue-next";
 import { useAuditLog } from "../hooks/useAuditLog";
+import { useToast } from "../hooks/useToast";
+import { isTauri } from "../lib/tauri";
 
 const { log } = useAuditLog();
+const { show: showToast } = useToast();
 const svcStatus = ref<"running" | "stopped" | "not_installed" | "loading">("loading");
+const installing = ref(false);
 
 async function refresh() {
-  if (!("__TAURI__" in window)) { svcStatus.value = "not_installed"; return; }
+  if (!isTauri) { svcStatus.value = "not_installed"; return; }
   try { const { getServiceStatus } = await import("../hooks/useTauri"); svcStatus.value = (await getServiceStatus()) as any; } catch { svcStatus.value = "not_installed"; }
 }
 onMounted(refresh);
 
 async function install() {
+  installing.value = true;
   try {
-    if ("__TAURI__" in window) { const { installService } = await import("../hooks/useTauri"); await installService(); }
+    if (isTauri) {
+      const { installService } = await import("../hooks/useTauri");
+      const result = await installService();
+      showToast(result, "success");
+    }
     log("service.install", "Installed service");
-  } catch (e) { log("service.install", `Failed: ${e}`, "error"); }
+  } catch (e) {
+    log("service.install", `Failed: ${e}`, "error");
+    showToast(`Install failed: ${e}`, "error");
+  }
+  installing.value = false;
   refresh();
 }
 async function uninstall() {
   try {
-    if ("__TAURI__" in window) { const { uninstallService } = await import("../hooks/useTauri"); await uninstallService(); }
+    if (isTauri) {
+      const { uninstallService } = await import("../hooks/useTauri");
+      const result = await uninstallService();
+      showToast(result, "success");
+    }
     log("service.uninstall", "Uninstalled service");
-  } catch (e) { log("service.uninstall", `Failed: ${e}`, "error"); }
+  } catch (e) {
+    log("service.uninstall", `Failed: ${e}`, "error");
+    showToast(`Uninstall failed: ${e}`, "error");
+  }
   refresh();
 }
 async function toggleService() {
   const action = svcStatus.value === "running" ? "stop" : "start";
   try {
-    if ("__TAURI__" in window) {
+    if (isTauri) {
       const { invoke } = await import("@tauri-apps/api/core");
-      // Use sc.exe via shell — service start/stop requires admin
       await invoke("plugin:shell|execute", { program: "sc", args: [action, "WslPortHole"] });
     }
     log(`service.${action}`, `${action === "start" ? "Started" : "Stopped"} service`);
+    showToast(`Service ${action === "start" ? "started" : "stopped"}`, "success");
   } catch (e) {
     log(`service.${action}`, `Failed: ${e}`, "error");
+    showToast(`Failed to ${action} service: ${e}`, "error");
   }
-  // Wait briefly for the state to change, then refresh
   setTimeout(refresh, 1500);
 }
 
@@ -64,10 +84,16 @@ const statusLabel = (s: string) => {
         <span class="text-base font-semibold" :style="{ color: 'var(--text-primary)' }">WslPortHole</span>
         <span class="text-xs px-2 py-0.5 rounded" :style="{ background: statusColor(svcStatus), color: '#000' }">{{ statusLabel(svcStatus) }}</span>
         <div class="flex-1" />
-        <button @click="refresh" class="p-1" :style="{ color: 'var(--text-secondary)' }"><RefreshCw :size="14" /></button>
+        <button @click="refresh" class="p-1" :style="{ color: 'var(--text-secondary)' }" title="Refresh service status"><RefreshCw :size="14" /></button>
       </div>
       <div class="grid grid-cols-2 gap-3">
-        <button v-if="svcStatus === 'not_installed'" @click="install" class="flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium col-span-2" :style="{ background: 'var(--accent)', color: 'var(--bg-primary)' }"><Download :size="14" /> Install Service</button>
+        <button v-if="svcStatus === 'not_installed'" @click="install" :disabled="installing"
+          class="flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium col-span-2"
+          :style="{ background: installing ? 'var(--accent-dim)' : 'var(--accent)', color: 'var(--bg-primary)' }">
+          <RefreshCw v-if="installing" :size="14" class="animate-spin" />
+          <Download v-else :size="14" />
+          {{ installing ? "Downloading & installing..." : "Install Service" }}
+        </button>
         <template v-else>
           <button @click="toggleService" class="flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm" :style="{ border: '1px solid var(--border)', color: 'var(--text-primary)' }">
             <template v-if="svcStatus === 'running'"><Square :size="14" /> Stop</template>
@@ -80,7 +106,7 @@ const statusLabel = (s: string) => {
     <div class="rounded-lg p-4" :style="{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }">
       <h3 class="text-sm font-semibold mb-2" :style="{ color: 'var(--text-primary)' }">How it works</h3>
       <ol class="text-xs space-y-1.5 list-decimal list-inside" :style="{ color: 'var(--text-secondary)' }">
-        <li>Registers as a Windows Service with auto-start on boot</li>
+        <li>Downloads and registers as a Windows Service with auto-start on boot</li>
         <li>Subscribes to Hyper-V VmSwitch event log (Event ID 102)</li>
         <li>When WSL's IP changes, waits 5s for it to settle</li>
         <li>Re-applies all enabled portproxy + firewall rules with the new IP</li>
@@ -88,5 +114,8 @@ const statusLabel = (s: string) => {
         <li>Falls back to 30s polling if event subscription is unavailable</li>
       </ol>
     </div>
+    <p class="text-xs mt-4" :style="{ color: 'var(--text-secondary)' }">
+      Note: Installing the service requires administrator privileges. If the install fails, try running the app as Administrator.
+    </p>
   </div>
 </template>

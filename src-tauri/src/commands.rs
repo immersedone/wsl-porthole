@@ -416,21 +416,97 @@ pub fn write_wslconfig(content: String) -> Result<(), String> {
 
 // ---------- Service management ----------
 
+/// Path where the service binary lives.
+fn service_exe_path() -> PathBuf {
+    app_data_dir().join("wsl-porthole-service.exe")
+}
+
 #[tauri::command]
-pub fn install_service() -> Result<String, String> {
-    let status = wsl_porthole_core::sys_path::command("wsl-porthole-service").arg("install").status().map_err(|e| e.to_string())?;
-    if status.success() { Ok("Service installed".into()) } else { Err("Failed to install service".into()) }
+pub async fn install_service(app: tauri::AppHandle) -> Result<String, String> {
+    let svc_path = service_exe_path();
+
+    // Download the service binary if it doesn't exist
+    if !svc_path.exists() {
+        let version = app.config().version.clone().unwrap_or_default();
+        let url = format!(
+            "https://github.com/immersedone/wsl-porthole/releases/download/v{}/wsl-porthole-service.exe",
+            version
+        );
+        tracing::info!("Downloading service binary from: {url}");
+
+        let client = reqwest::Client::builder()
+            .user_agent("WSL-PortHole")
+            .build()
+            .map_err(|e| e.to_string())?;
+
+        let resp = client.get(&url).send().await
+            .map_err(|e| format!("Failed to download service: {e}"))?;
+
+        if !resp.status().is_success() {
+            return Err(format!("Download returned HTTP {}", resp.status()));
+        }
+
+        let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
+        std::fs::write(&svc_path, &bytes)
+            .map_err(|e| format!("Failed to save service binary: {e}"))?;
+        tracing::info!("Service binary saved to: {}", svc_path.display());
+    }
+
+    // Register with sc create
+    let svc_path_str = svc_path.to_string_lossy();
+    let output = wsl_porthole_core::sys_path::command(wsl_porthole_core::sys_path::sc())
+        .args(["create", "WslPortHole",
+               &format!("binPath={}", svc_path_str),
+               "start=auto",
+               "DisplayName=WSL PortHole Service"])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Err(format!("sc create failed: {} {}", stdout.trim(), stderr.trim()));
+    }
+
+    // Start the service
+    let _ = wsl_porthole_core::sys_path::command(wsl_porthole_core::sys_path::sc())
+        .args(["start", "WslPortHole"])
+        .output();
+
+    tracing::info!("Service installed and started");
+    Ok("Service installed and started".into())
 }
 
 #[tauri::command]
 pub fn uninstall_service() -> Result<String, String> {
-    let status = wsl_porthole_core::sys_path::command("wsl-porthole-service").arg("uninstall").status().map_err(|e| e.to_string())?;
-    if status.success() { Ok("Service uninstalled".into()) } else { Err("Failed to uninstall service".into()) }
+    // Stop first
+    let _ = wsl_porthole_core::sys_path::command(wsl_porthole_core::sys_path::sc())
+        .args(["stop", "WslPortHole"])
+        .output();
+
+    // Delete
+    let output = wsl_porthole_core::sys_path::command(wsl_porthole_core::sys_path::sc())
+        .args(["delete", "WslPortHole"])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("sc delete failed: {}", stderr.trim()));
+    }
+
+    // Remove the binary
+    let svc_path = service_exe_path();
+    let _ = std::fs::remove_file(&svc_path);
+
+    tracing::info!("Service uninstalled");
+    Ok("Service uninstalled".into())
 }
 
 #[tauri::command]
 pub fn get_service_status() -> Result<String, String> {
-    let output = wsl_porthole_core::sys_path::command(wsl_porthole_core::sys_path::sc()).args(["query", "WslPortHole"]).output().map_err(|e| e.to_string())?;
+    let output = wsl_porthole_core::sys_path::command(wsl_porthole_core::sys_path::sc())
+        .args(["query", "WslPortHole"]).output().map_err(|e| e.to_string())?;
     let stdout = String::from_utf8_lossy(&output.stdout);
     if stdout.contains("RUNNING") { Ok("running".into()) }
     else if stdout.contains("STOPPED") { Ok("stopped".into()) }
