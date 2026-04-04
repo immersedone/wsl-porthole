@@ -27,6 +27,8 @@ const isTauri = "__TAURI__" in window;
 const activePage = ref<Page>("rules");
 const status = ref<StatusInfo | null>(null);
 const rules = ref<Rule[]>([]);
+const startupError = ref<string | null>(null);
+const diagOutput = ref<string | null>(null);
 const theme = useTheme();
 const audit = useAuditLog();
 const toast = useToast();
@@ -41,8 +43,11 @@ async function refreshStatus() {
   try {
     const { getStatus } = await import("./hooks/useTauri");
     status.value = await getStatus();
+    // Clear startup error once status works
+    if (status.value) startupError.value = null;
   } catch (e) {
     console.error("Failed to get status:", e);
+    startupError.value = `Status check failed: ${e}`;
   }
 }
 
@@ -60,10 +65,21 @@ provide("refreshRules", refreshRules);
 provide("refreshStatus", refreshStatus);
 
 let interval: ReturnType<typeof setInterval>;
-onMounted(() => {
+onMounted(async () => {
   refreshStatus();
   refreshRules();
   interval = setInterval(refreshStatus, 10000);
+
+  // Run diagnostics on startup to catch issues early
+  if (isTauri) {
+    try {
+      const { diagnose } = await import("./hooks/useTauri");
+      const diag = await diagnose();
+      diagOutput.value = JSON.stringify(diag, null, 2);
+    } catch (e) {
+      diagOutput.value = `Diagnostics failed: ${e}`;
+    }
+  }
 
   // Global keyboard shortcuts
   document.addEventListener("keydown", handleKeydown);
@@ -120,6 +136,18 @@ const pageComponents: Record<Page, any> = {
   <div class="flex h-screen w-screen overflow-hidden no-select">
     <SidebarNav :active-page="activePage" :status="status" @navigate="activePage = $event" />
     <div class="flex flex-col flex-1 min-w-0">
+      <!-- Startup diagnostic banner -->
+      <div v-if="startupError || (status && !status.wsl_ip && status.wsl_error)" class="px-4 py-2 text-xs border-b"
+        :style="{ background: 'rgba(248,81,73,0.1)', borderColor: 'var(--status-err)', color: 'var(--status-err)' }">
+        <strong>WSL Detection Error:</strong> {{ startupError || status?.wsl_error }}
+      </div>
+      <div v-if="diagOutput && status && !status.wsl_ip" class="px-4 py-2 text-[10px] font-mono border-b overflow-x-auto max-h-32 overflow-y-auto"
+        :style="{ background: 'var(--bg-tertiary)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }">
+        <details>
+          <summary class="cursor-pointer" :style="{ color: 'var(--accent)' }">System diagnostics (click to expand)</summary>
+          <pre class="mt-1 whitespace-pre-wrap">{{ diagOutput }}</pre>
+        </details>
+      </div>
       <main class="flex-1 overflow-y-auto p-6">
         <component :is="pageComponents[activePage]" />
       </main>

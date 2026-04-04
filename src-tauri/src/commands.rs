@@ -170,11 +170,22 @@ pub fn get_status() -> Result<StatusInfo, String> {
 
     let wsl_result = wsl_porthole_core::ip::detect_wsl_ip();
     let host_result = wsl_porthole_core::ip::detect_host_ip();
+    let gw_result = wsl_porthole_core::ip::detect_host_gateway();
+
+    if let Err(ref e) = wsl_result {
+        tracing::error!("WSL IP detection failed: {e}");
+    }
+    if let Err(ref e) = host_result {
+        tracing::error!("Host IP detection failed: {e}");
+    }
+    if let Err(ref e) = gw_result {
+        tracing::warn!("Gateway detection failed: {e}");
+    }
 
     Ok(StatusInfo {
         wsl_ip: wsl_result.as_ref().ok().cloned(),
         host_ip: host_result.as_ref().ok().cloned(),
-        host_gw: wsl_porthole_core::ip::detect_host_gateway().ok(),
+        host_gw: gw_result.ok(),
         active_rules: cfg.rules.iter().filter(|r| r.enabled).count(),
         lan_rules: cfg.rules.iter().filter(|r| r.enabled && r.lan).count(),
         total_rules: cfg.rules.len(),
@@ -199,9 +210,10 @@ pub fn sync_now() -> Result<String, String> { apply_rules() }
 // ---------- Diagnostics ----------
 
 #[tauri::command]
-pub fn diagnose() -> serde_json::Value {
+pub fn diagnose() -> Result<serde_json::Value, String> {
     use std::process::Command;
     use wsl_porthole_core::sys_path;
+    tracing::info!("Running diagnostics...");
 
     let wsl_path = sys_path::wsl();
     let wsl_exists = std::path::Path::new(wsl_path).exists();
@@ -244,7 +256,7 @@ pub fn diagnose() -> serde_json::Value {
         Err(e) => format!("query failed: {e}"),
     };
 
-    serde_json::json!({
+    let result = serde_json::json!({
         "config_dir": app_data_dir().to_string_lossy(),
         "config_exists": config_path().exists(),
         "settings_exists": settings_path().exists(),
@@ -264,7 +276,14 @@ pub fn diagnose() -> serde_json::Value {
         "docker": docker_test,
         "service": service_status,
         "log_file": log_path().to_string_lossy(),
-    })
+        "all_wsl_candidates": {
+            "system32": std::path::Path::new(r"C:\Windows\System32\wsl.exe").exists(),
+            "windows": std::path::Path::new(r"C:\Windows\wsl.exe").exists(),
+            "sysnative": std::path::Path::new(r"C:\Windows\Sysnative\wsl.exe").exists(),
+        },
+    });
+    tracing::info!("Diagnostics result: {result}");
+    Ok(result)
 }
 
 // ---------- Import / Export ----------
