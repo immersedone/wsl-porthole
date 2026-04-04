@@ -24,6 +24,35 @@ fn main() {
 
     tracing::info!("WSL PortHole starting — config dir: {}", log_dir.display());
 
+    // Self-test: can we execute wsl.exe from this process?
+    {
+        use wsl_porthole_core::sys_path;
+        let wsl_path = sys_path::wsl();
+        tracing::info!("WSL path resolved to: {wsl_path}");
+        tracing::info!("WSL path exists: {}", std::path::Path::new(wsl_path).exists());
+
+        match sys_path::command(wsl_path).args(["hostname", "-I"]).output() {
+            Ok(out) => {
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                tracing::info!("WSL self-test: status={}, stdout={:?}", out.status, stdout.trim());
+            }
+            Err(e) => {
+                tracing::error!("WSL self-test FAILED: {e}");
+            }
+        }
+
+        match sys_path::command(sys_path::ipconfig()).output() {
+            Ok(out) => {
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                let ipv4_lines: Vec<&str> = stdout.lines().filter(|l| l.contains("IPv4")).collect();
+                tracing::info!("ipconfig self-test: status={}, IPv4 lines={}", out.status, ipv4_lines.len());
+            }
+            Err(e) => {
+                tracing::error!("ipconfig self-test FAILED: {e}");
+            }
+        }
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {

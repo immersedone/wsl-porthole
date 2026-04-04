@@ -2,8 +2,33 @@
 //!
 //! GUI apps launched via Explorer or shortcuts may not have System32 on their
 //! PATH. We try multiple known locations and fall back to bare names.
+//!
+//! CRITICAL: Tauri apps use `#![windows_subsystem = "windows"]` which means
+//! there is no console. `std::process::Command` must use `CREATE_NO_WINDOW`
+//! flag to prevent hanging or failing when trying to create console handles.
 
+use std::process::Command;
 use std::sync::OnceLock;
+
+/// Windows process creation flag to suppress console window.
+/// Required for GUI apps (`windows_subsystem = "windows"`) that spawn child processes.
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+/// Create a `Command` with proper Windows flags for GUI apps.
+///
+/// On Windows, sets `CREATE_NO_WINDOW` to prevent child processes from
+/// failing or hanging when there's no console (which is the case for
+/// `#![windows_subsystem = "windows"]` Tauri apps).
+pub fn command(exe: &str) -> Command {
+    let mut cmd = Command::new(exe);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd
+}
 
 /// Find the first existing path, or fall back to the bare name.
 fn find_exe(candidates: &[&str], fallback: &str) -> String {

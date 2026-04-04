@@ -34,6 +34,7 @@ fn log_path() -> PathBuf {
 
 #[tauri::command]
 pub fn get_rules() -> Result<Vec<Rule>, String> {
+    tracing::info!("get_rules() invoked");
     let cfg = config::load_rules(&config_path()).map_err(|e| e.to_string())?;
     Ok(cfg.rules)
 }
@@ -166,7 +167,8 @@ pub struct StatusInfo {
 
 #[tauri::command]
 pub fn get_status() -> Result<StatusInfo, String> {
-    let cfg = config::load_rules(&config_path()).map_err(|e| e.to_string())?;
+    tracing::info!("get_status() invoked");
+    let cfg = config::load_rules(&config_path()).map_err(|e| { tracing::error!("load_rules failed: {e}"); e.to_string() })?;
 
     let wsl_result = wsl_porthole_core::ip::detect_wsl_ip();
     let host_result = wsl_porthole_core::ip::detect_host_ip();
@@ -211,13 +213,12 @@ pub fn sync_now() -> Result<String, String> { apply_rules() }
 
 #[tauri::command]
 pub fn diagnose() -> Result<serde_json::Value, String> {
-    use std::process::Command;
     use wsl_porthole_core::sys_path;
-    tracing::info!("Running diagnostics...");
+    tracing::info!("diagnose() invoked");
 
     let wsl_path = sys_path::wsl();
     let wsl_exists = std::path::Path::new(wsl_path).exists();
-    let wsl_test = Command::new(wsl_path).arg("--version").output();
+    let wsl_test = sys_path::command(wsl_path).arg("--version").output();
     let wsl_version = match &wsl_test {
         Ok(o) if o.status.success() => {
             let raw = &o.stdout;
@@ -245,7 +246,7 @@ pub fn diagnose() -> Result<serde_json::Value, String> {
         .unwrap_or_else(|_| "no async runtime".to_string());
 
     let sc_path = sys_path::sc();
-    let service_test = Command::new(sc_path).args(["query", "WslPortHole"]).output();
+    let service_test = sys_path::command(sc_path).args(["query", "WslPortHole"]).output();
     let service_status = match &service_test {
         Ok(o) => {
             let stdout = String::from_utf8_lossy(&o.stdout);
@@ -417,19 +418,19 @@ pub fn write_wslconfig(content: String) -> Result<(), String> {
 
 #[tauri::command]
 pub fn install_service() -> Result<String, String> {
-    let status = std::process::Command::new("wsl-porthole-service").arg("install").status().map_err(|e| e.to_string())?;
+    let status = wsl_porthole_core::sys_path::command("wsl-porthole-service").arg("install").status().map_err(|e| e.to_string())?;
     if status.success() { Ok("Service installed".into()) } else { Err("Failed to install service".into()) }
 }
 
 #[tauri::command]
 pub fn uninstall_service() -> Result<String, String> {
-    let status = std::process::Command::new("wsl-porthole-service").arg("uninstall").status().map_err(|e| e.to_string())?;
+    let status = wsl_porthole_core::sys_path::command("wsl-porthole-service").arg("uninstall").status().map_err(|e| e.to_string())?;
     if status.success() { Ok("Service uninstalled".into()) } else { Err("Failed to uninstall service".into()) }
 }
 
 #[tauri::command]
 pub fn get_service_status() -> Result<String, String> {
-    let output = std::process::Command::new(r"C:\Windows\System32\sc.exe").args(["query", "WslPortHole"]).output().map_err(|e| e.to_string())?;
+    let output = wsl_porthole_core::sys_path::command(wsl_porthole_core::sys_path::sc()).args(["query", "WslPortHole"]).output().map_err(|e| e.to_string())?;
     let stdout = String::from_utf8_lossy(&output.stdout);
     if stdout.contains("RUNNING") { Ok("running".into()) }
     else if stdout.contains("STOPPED") { Ok("stopped".into()) }
@@ -444,31 +445,35 @@ pub fn get_service_status() -> Result<String, String> {
 #[tauri::command]
 pub async fn check_for_app_updates(app: tauri::AppHandle) -> Result<Option<String>, String> {
     let current = app.config().version.clone().unwrap_or_default();
+    tracing::info!("Update check: current version = {current}");
 
     // Query GitHub releases API
     let client = reqwest::Client::builder()
         .user_agent("WSL-PortHole-Updater")
         .build()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| { tracing::error!("reqwest client build failed: {e}"); e.to_string() })?;
 
     let resp = client
         .get("https://api.github.com/repos/immersedone/wsl-porthole/releases/latest")
         .send()
         .await
-        .map_err(|e| format!("Failed to check for updates: {e}"))?;
+        .map_err(|e| { tracing::error!("GitHub API request failed: {e}"); format!("Failed to check for updates: {e}") })?;
 
-    if !resp.status().is_success() {
-        return Err(format!("GitHub API returned {}", resp.status()));
+    let status = resp.status();
+    tracing::info!("GitHub API response: {status}");
+
+    if !status.is_success() {
+        return Err(format!("GitHub API returned {status}"));
     }
 
-    let data: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let data: serde_json::Value = resp.json().await.map_err(|e| { tracing::error!("JSON parse failed: {e}"); e.to_string() })?;
     let tag = data["tag_name"].as_str().unwrap_or("").trim_start_matches('v');
+    tracing::info!("Update check: latest tag = {tag}, current = {current}, needs_update = {}", tag != current);
 
     if tag.is_empty() {
         return Ok(None);
     }
 
-    // Simple version comparison (works for semver like 0.4.1 vs 0.4.2)
     if tag != current {
         Ok(Some(tag.to_string()))
     } else {

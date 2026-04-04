@@ -47,8 +47,8 @@ async function checkForUpdates() {
       showToast("You're on the latest version", "success");
     }
   } catch (e: any) {
-    error.value = String(e);
-    showToast(`Update check failed: ${e}`, "error");
+    error.value = `Update check failed: ${e}`;
+    showToast(error.value, "error");
   }
   checking.value = false;
 }

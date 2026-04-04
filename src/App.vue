@@ -39,15 +39,19 @@ provide("audit", audit);
 provide("toast", toast);
 
 async function refreshStatus() {
-  if (!isTauri) return;
+  if (!isTauri) { startupError.value = "Not running in Tauri"; return; }
   try {
     const { getStatus } = await import("./hooks/useTauri");
-    status.value = await getStatus();
-    // Clear startup error once status works
-    if (status.value) startupError.value = null;
+    const result = await getStatus();
+    status.value = result;
+    // Show status details for debugging
+    if (result && result.wsl_ip) {
+      startupError.value = null;
+    } else {
+      startupError.value = `Status returned but no WSL IP. wsl_error: ${result?.wsl_error ?? 'none'}, host_error: ${result?.host_error ?? 'none'}, config_dir: ${result?.config_dir ?? 'unknown'}`;
+    }
   } catch (e) {
-    console.error("Failed to get status:", e);
-    startupError.value = `Status check failed: ${e}`;
+    startupError.value = `invoke("get_status") threw: ${e}`;
   }
 }
 

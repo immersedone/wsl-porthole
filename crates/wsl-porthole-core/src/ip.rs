@@ -5,7 +5,6 @@
 //! - `detect_host_gateway()` — WSL→Windows gateway IP via `/etc/resolv.conf`
 
 use anyhow::{anyhow, Result};
-use std::process::Command;
 
 use crate::sys_path;
 
@@ -16,7 +15,7 @@ pub fn detect_wsl_ip() -> Result<String> {
 
 /// Detect a specific WSL distro's IPv4 address (or default if `None`).
 pub fn detect_wsl_ip_for(distro: Option<&str>) -> Result<String> {
-    let mut cmd = Command::new(sys_path::wsl());
+    let mut cmd = sys_path::command(sys_path::wsl());
     if let Some(d) = distro {
         cmd.args(["-d", d]);
     }
@@ -41,7 +40,7 @@ pub fn detect_wsl_ip_for(distro: Option<&str>) -> Result<String> {
 /// Falls back to parsing `ipconfig` output if PowerShell is unavailable.
 pub fn detect_host_ip() -> Result<String> {
     // Try PowerShell first — most reliable
-    let ps_output = Command::new(sys_path::powershell())
+    let ps_output = sys_path::command(sys_path::powershell())
         .args([
             "-NoProfile",
             "-Command",
@@ -58,7 +57,7 @@ pub fn detect_host_ip() -> Result<String> {
     }
 
     // Fallback: parse ipconfig
-    let output = Command::new(sys_path::ipconfig()).output()?;
+    let output = sys_path::command(sys_path::ipconfig()).output()?;
     let stdout = String::from_utf8_lossy(&output.stdout);
     for line in stdout.lines() {
         let line = line.trim();
@@ -80,7 +79,7 @@ pub fn detect_host_ip() -> Result<String> {
 /// Reads from WSL's `/etc/resolv.conf` nameserver entry, which is
 /// typically the Windows host gateway address.
 pub fn detect_host_gateway() -> Result<String> {
-    let output = Command::new(sys_path::wsl())
+    let output = sys_path::command(sys_path::wsl())
         .args(["cat", "/etc/resolv.conf"])
         .output()?;
     if !output.status.success() {
@@ -111,7 +110,7 @@ pub struct DistroInfo {
 
 /// List installed WSL distributions by parsing `wsl.exe -l -v`.
 pub fn list_distros() -> Result<Vec<DistroInfo>> {
-    let output = Command::new(sys_path::wsl())
+    let output = sys_path::command(sys_path::wsl())
         .args(["-l", "-v"])
         .output()?;
     if !output.status.success() {

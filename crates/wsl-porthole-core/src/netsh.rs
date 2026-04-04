@@ -4,7 +4,6 @@
 
 use crate::rules::{Direction, Rule, expand_ports, resolve_addr_simple};
 use anyhow::Result;
-use std::process::Command;
 
 /// A single active portproxy entry as reported by `netsh`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,7 +26,7 @@ pub fn apply_rule(rule: &Rule, wsl_ip: &str, host_gw: &str) -> Result<()> {
     let connect_ports = expand_ports(&rule.connect_port);
 
     for (lp, cp) in listen_ports.iter().zip(connect_ports.iter()) {
-        let status = Command::new(crate::sys_path::netsh())
+        let status = crate::sys_path::command(crate::sys_path::netsh())
             .args([
                 "interface",
                 "portproxy",
@@ -57,7 +56,7 @@ pub fn remove_rule(rule: &Rule) -> Result<()> {
 
 /// Remove a single portproxy entry by listen port and address.
 pub fn remove_listen_port(port: u16, addr: &str) -> Result<()> {
-    Command::new(crate::sys_path::netsh())
+    crate::sys_path::command(crate::sys_path::netsh())
         .args([
             "interface",
             "portproxy",
@@ -72,7 +71,7 @@ pub fn remove_listen_port(port: u16, addr: &str) -> Result<()> {
 
 /// Remove all portproxy rules.
 pub fn reset_all() -> Result<()> {
-    Command::new(crate::sys_path::netsh())
+    crate::sys_path::command(crate::sys_path::netsh())
         .args(["interface", "portproxy", "reset"])
         .status()?;
     Ok(())
@@ -82,7 +81,7 @@ pub fn reset_all() -> Result<()> {
 ///
 /// Parses the output of `netsh interface portproxy show v4tov4`.
 pub fn list_active() -> Result<Vec<ActiveProxy>> {
-    let output = Command::new(crate::sys_path::netsh())
+    let output = crate::sys_path::command(crate::sys_path::netsh())
         .args(["interface", "portproxy", "show", "v4tov4"])
         .output()?;
 

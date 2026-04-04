@@ -5,7 +5,6 @@
 
 use crate::rules::{expand_ports, Rule};
 use anyhow::Result;
-use std::process::Command;
 
 const RULE_PREFIX: &str = "WSL PortHole";
 
@@ -24,7 +23,7 @@ pub fn add_inbound_rule(rule: &Rule) -> Result<()> {
     // Remove existing rule with same name first (idempotent)
     let _ = remove_firewall_rule_by_name(&display_name);
 
-    let status = Command::new(crate::sys_path::powershell())
+    let status = crate::sys_path::command(crate::sys_path::powershell())
         .args([
             "-NoProfile",
             "-Command",
@@ -60,7 +59,7 @@ pub fn add_wsl_interface_rule(rule: &Rule) -> Result<()> {
 
     let _ = remove_firewall_rule_by_name(&display_name);
 
-    let status = Command::new(crate::sys_path::powershell())
+    let status = crate::sys_path::command(crate::sys_path::powershell())
         .args([
             "-NoProfile",
             "-Command",
@@ -78,7 +77,7 @@ pub fn add_wsl_interface_rule(rule: &Rule) -> Result<()> {
 
 /// Remove all WSL PortHole firewall rules (used during reset/cleanup).
 pub fn remove_all_rules() -> Result<()> {
-    let status = Command::new(crate::sys_path::powershell())
+    let status = crate::sys_path::command(crate::sys_path::powershell())
         .args([
             "-NoProfile",
             "-Command",
@@ -94,7 +93,7 @@ pub fn remove_all_rules() -> Result<()> {
 
 /// List display names of all WSL PortHole firewall rules.
 pub fn list_rules() -> Result<Vec<String>> {
-    let output = Command::new(crate::sys_path::powershell())
+    let output = crate::sys_path::command(crate::sys_path::powershell())
         .args([
             "-NoProfile",
             "-Command",
@@ -114,7 +113,7 @@ pub fn list_rules() -> Result<Vec<String>> {
 }
 
 fn remove_firewall_rule_by_name(display_name: &str) -> Result<()> {
-    let status = Command::new(crate::sys_path::powershell())
+    let status = crate::sys_path::command(crate::sys_path::powershell())
         .args([
             "-NoProfile",
             "-Command",

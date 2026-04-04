@@ -16,7 +16,7 @@ pub fn write_hosts_entry(hostname: &str, ip: &str, distro: Option<&str>) -> Resu
     let entry = format!("{ip}  {hostname}");
 
     // Read current hosts file
-    let mut cmd = Command::new(crate::sys_path::wsl());
+    let mut cmd = crate::sys_path::command(crate::sys_path::wsl());
     if let Some(d) = distro {
         cmd.args(["-d", d]);
     }
@@ -67,7 +67,7 @@ pub fn write_hosts_entry(hostname: &str, ip: &str, distro: Option<&str>) -> Resu
     let new_content = new_lines.join("\n");
 
     // Write back via wsl
-    let mut write_cmd = Command::new(crate::sys_path::wsl());
+    let mut write_cmd = crate::sys_path::command(crate::sys_path::wsl());
     if let Some(d) = distro {
         write_cmd.args(["-d", d]);
     }
@@ -83,7 +83,7 @@ pub fn write_hosts_entry(hostname: &str, ip: &str, distro: Option<&str>) -> Resu
 
 /// Remove all WSL PortHole managed entries from /etc/hosts.
 pub fn clean_hosts(distro: Option<&str>) -> Result<()> {
-    let mut cmd = Command::new(crate::sys_path::wsl());
+    let mut cmd = crate::sys_path::command(crate::sys_path::wsl());
     if let Some(d) = distro {
         cmd.args(["-d", d]);
     }
@@ -102,7 +102,7 @@ pub fn inject_env_var(name: &str, value: &str, distro: Option<&str>) -> Result<(
     let marker = "# WSL PortHole";
     let export_line = format!("export {name}={value}  {marker}");
 
-    let mut cmd = Command::new(crate::sys_path::wsl());
+    let mut cmd = crate::sys_path::command(crate::sys_path::wsl());
     if let Some(d) = distro {
         cmd.args(["-d", d]);
     }
@@ -124,7 +124,7 @@ pub fn inject_env_var(name: &str, value: &str, distro: Option<&str>) -> Result<(
 /// Remove all WSL PortHole env vars from .bashrc.
 pub fn clean_env_vars(distro: Option<&str>) -> Result<()> {
     let marker = "# WSL PortHole";
-    let mut cmd = Command::new(crate::sys_path::wsl());
+    let mut cmd = crate::sys_path::command(crate::sys_path::wsl());
     if let Some(d) = distro {
         cmd.args(["-d", d]);
     }
