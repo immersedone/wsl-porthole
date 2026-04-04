@@ -1,6 +1,6 @@
 [package]
 name    = "wsl-porthole-app"
-version = "0.4.2"
+version = "0.4.3"
 edition = "2021"
 
 [build-dependencies]
@@ -10,12 +10,13 @@ tauri-build = { version = "2", features = [] }
 wsl-porthole-core  = { path = "../crates/wsl-porthole-core" }
 tauri              = { version = "2", features = ["tray-icon"] }
 tauri-plugin-shell = "2"
-tauri-plugin-updater = "2"
+# tauri-plugin-updater removed — using reqwest + GitHub API directly
 tauri-plugin-single-instance = "2"
 tokio              = { version = "1", features = ["full"] }
 serde              = { version = "1", features = ["derive"] }
 serde_json         = "1"
 anyhow             = "1"
+reqwest            = { version = "0.12", features = ["json"] }
 dirs               = "5"
 tracing            = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

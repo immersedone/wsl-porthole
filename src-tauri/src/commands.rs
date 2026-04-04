@@ -419,14 +419,40 @@ pub fn get_service_status() -> Result<String, String> {
 
 // ---------- Updater ----------
 
-use tauri_plugin_updater::UpdaterExt;
-
+/// Check GitHub releases for a newer version.
+/// The Tauri updater plugin requires signing keys we don't have,
+/// so we query the GitHub API directly from Rust (no CORS issues).
 #[tauri::command]
 pub async fn check_for_app_updates(app: tauri::AppHandle) -> Result<Option<String>, String> {
-    let updater = app.updater().map_err(|e| format!("Updater not available: {e}"))?;
-    match updater.check().await {
-        Ok(Some(update)) => Ok(Some(update.version)),
-        Ok(None) => Ok(None),
-        Err(e) => Err(format!("Update check failed: {e}")),
+    let current = app.config().version.clone().unwrap_or_default();
+
+    // Query GitHub releases API
+    let client = reqwest::Client::builder()
+        .user_agent("WSL-PortHole-Updater")
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let resp = client
+        .get("https://api.github.com/repos/immersedone/wsl-porthole/releases/latest")
+        .send()
+        .await
+        .map_err(|e| format!("Failed to check for updates: {e}"))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("GitHub API returned {}", resp.status()));
+    }
+
+    let data: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let tag = data["tag_name"].as_str().unwrap_or("").trim_start_matches('v');
+
+    if tag.is_empty() {
+        return Ok(None);
+    }
+
+    // Simple version comparison (works for semver like 0.4.1 vs 0.4.2)
+    if tag != current {
+        Ok(Some(tag.to_string()))
+    } else {
+        Ok(None)
     }
 }

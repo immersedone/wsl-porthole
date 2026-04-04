@@ -8,8 +8,6 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager,
 };
-use tauri_plugin_updater::UpdaterExt;
-
 fn main() {
     // Initialize file logging to %APPDATA%\WSL PortHole\wsl-porthole.log
     let log_dir = dirs::data_dir()
@@ -28,7 +26,6 @@ fn main() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // If a second instance is launched, focus the existing window
             if let Some(window) = app.get_webview_window("main") {
@@ -83,12 +80,6 @@ fn main() {
                 })
                 .build(app)?;
 
-            // Check for updates on startup (non-blocking)
-            let handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                check_for_updates(handle).await;
-            });
-
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -136,27 +127,3 @@ fn main() {
         .expect("error while running WSL PortHole");
 }
 
-/// Check for updates using the Tauri updater plugin.
-async fn check_for_updates(app: tauri::AppHandle) {
-    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-
-    let updater = match app.updater() {
-        Ok(u) => u,
-        Err(e) => {
-            tracing::debug!("Updater not available: {e}");
-            return;
-        }
-    };
-
-    match updater.check().await {
-        Ok(Some(update)) => {
-            tracing::info!("Update available: v{}", update.version);
-        }
-        Ok(None) => {
-            tracing::debug!("No updates available");
-        }
-        Err(e) => {
-            tracing::debug!("Update check failed: {e}");
-        }
-    }
-}

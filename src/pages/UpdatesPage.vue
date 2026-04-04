@@ -33,22 +33,12 @@ async function checkForUpdates() {
   try {
     // Check GitHub releases API directly for the latest version
     if (isTauri) {
-      try {
-        const { checkForAppUpdates } = await import("../hooks/useTauri");
-        const result = await checkForAppUpdates();
-        latestVersion.value = result;
-      } catch {
-        // Tauri updater not configured with signing keys — check GitHub API directly
-        const resp = await globalThis.fetch("https://api.github.com/repos/immersedone/wsl-porthole/releases/latest");
-        if (resp.ok) {
-          const data = await resp.json();
-          const tag = (data.tag_name ?? "").replace(/^v/, "");
-          latestVersion.value = tag !== currentVersion.value ? tag : null;
-          downloadUrl.value = data.html_url ?? null;
-        }
+      const { checkForAppUpdates } = await import("../hooks/useTauri");
+      const result = await checkForAppUpdates();
+      latestVersion.value = result;
+      if (result) {
+        downloadUrl.value = `https://github.com/immersedone/wsl-porthole/releases/tag/v${result}`;
       }
-    } else {
-      latestVersion.value = null;
     }
     lastChecked.value = new Date().toLocaleTimeString();
     if (latestVersion.value) {
