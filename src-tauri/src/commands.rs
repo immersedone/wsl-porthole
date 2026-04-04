@@ -440,8 +440,49 @@ pub fn get_service_status() -> Result<String, String> {
 // ---------- Updater ----------
 
 /// Check GitHub releases for a newer version.
-/// The Tauri updater plugin requires signing keys we don't have,
-/// so we query the GitHub API directly from Rust (no CORS issues).
+/// Download and install the latest version from GitHub releases.
+#[tauri::command]
+pub async fn download_and_install_update(version: String, app: tauri::AppHandle) -> Result<String, String> {
+    let url = format!(
+        "https://github.com/immersedone/wsl-porthole/releases/download/v{}/WSL.PortHole_{}_x64-setup.exe",
+        version, version
+    );
+    tracing::info!("Downloading update from: {url}");
+
+    let client = reqwest::Client::builder()
+        .user_agent("WSL-PortHole-Updater")
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let resp = client.get(&url).send().await.map_err(|e| format!("Download failed: {e}"))?;
+    if !resp.status().is_success() {
+        return Err(format!("Download returned HTTP {}", resp.status()));
+    }
+
+    let bytes = resp.bytes().await.map_err(|e| format!("Failed to read download: {e}"))?;
+    let temp_dir = std::env::temp_dir();
+    let installer_path = temp_dir.join(format!("WSL_PortHole_{}_x64-setup.exe", version));
+
+    std::fs::write(&installer_path, &bytes).map_err(|e| format!("Failed to save installer: {e}"))?;
+    tracing::info!("Installer saved to: {}", installer_path.display());
+
+    // Launch the NSIS installer and exit the app so it can replace files
+    let _ = std::process::Command::new(&installer_path)
+        .spawn()
+        .map_err(|e| format!("Failed to launch installer: {e}"))?;
+
+    tracing::info!("Installer launched, exiting app for update...");
+
+    // Give a moment for the response to reach the frontend, then exit
+    let handle = app.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        handle.exit(0);
+    });
+
+    Ok("Installer launched — the app will restart after update.".into())
+}
+
 #[tauri::command]
 pub async fn check_for_app_updates(app: tauri::AppHandle) -> Result<Option<String>, String> {
     let current = app.config().version.clone().unwrap_or_default();

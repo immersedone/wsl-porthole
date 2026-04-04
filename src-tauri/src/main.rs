@@ -151,6 +151,7 @@ fn main() {
             commands::uninstall_service,
             commands::get_service_status,
             commands::check_for_app_updates,
+            commands::download_and_install_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running WSL PortHole");

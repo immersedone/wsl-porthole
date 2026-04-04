@@ -61,6 +61,7 @@ export const getServiceStatus = () => invoke<string>("get_service_status");
 
 // Updates
 export const checkForAppUpdates = () => invoke<string | null>("check_for_app_updates");
+export const downloadAndInstallUpdate = (version: string) => invoke<string>("download_and_install_update", { version });
 
 // Diagnostics
 export const diagnose = () => invoke<any>("diagnose");

@@ -14,7 +14,8 @@ const checking = ref(false);
 const error = ref<string | null>(null);
 const lastChecked = ref<string | null>(null);
 const autoUpdate = ref(true);
-const downloadUrl = ref<string | null>(null);
+const downloading = ref(false);
+const downloadProgress = ref("");
 
 async function loadVersion() {
   if (isTauri) {
@@ -36,9 +37,6 @@ async function checkForUpdates() {
       const { checkForAppUpdates } = await import("../hooks/useTauri");
       const result = await checkForAppUpdates();
       latestVersion.value = result;
-      if (result) {
-        downloadUrl.value = `https://github.com/immersedone/wsl-porthole/releases/tag/v${result}`;
-      }
     }
     lastChecked.value = new Date().toLocaleTimeString();
     if (latestVersion.value) {
@@ -55,15 +53,19 @@ async function checkForUpdates() {
 
 const hasUpdate = () => latestVersion.value && latestVersion.value !== currentVersion.value;
 
-async function openRelease() {
-  const url = downloadUrl.value ?? `https://github.com/immersedone/wsl-porthole/releases/tag/v${latestVersion.value}`;
-  if (isTauri) {
-    try {
-      const { open } = await import("@tauri-apps/plugin-shell");
-      await open(url);
-    } catch { globalThis.window.open(url, "_blank"); }
-  } else {
-    globalThis.window.open(url, "_blank");
+async function handleDownloadUpdate() {
+  if (!latestVersion.value || !isTauri) return;
+  downloading.value = true;
+  downloadProgress.value = "Downloading installer...";
+  try {
+    const { downloadAndInstallUpdate } = await import("../hooks/useTauri");
+    downloadProgress.value = "Installing — the app will restart...";
+    await downloadAndInstallUpdate(latestVersion.value);
+  } catch (e: any) {
+    downloading.value = false;
+    downloadProgress.value = "";
+    error.value = `Update failed: ${e}`;
+    showToast(`Update failed: ${e}`, "error");
   }
 }
 
@@ -104,10 +106,13 @@ onMounted(() => {
       </div>
 
       <div v-if="hasUpdate()" class="mt-3">
-        <button @click="openRelease" class="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium"
-          :style="{ background: 'var(--accent)', color: 'var(--bg-primary)' }"
-          title="Open the release page to download the latest version">
-          <Download :size="14" /> Download v{{ latestVersion }}
+        <button @click="handleDownloadUpdate" :disabled="downloading"
+          class="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium"
+          :style="{ background: downloading ? 'var(--accent-dim)' : 'var(--accent)', color: 'var(--bg-primary)' }"
+          title="Download and install the update automatically">
+          <RefreshCw v-if="downloading" :size="14" class="animate-spin" />
+          <Download v-else :size="14" />
+          {{ downloading ? downloadProgress : `Install v${latestVersion}` }}
         </button>
       </div>
 
