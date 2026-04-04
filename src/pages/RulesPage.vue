@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, inject, type Ref } from "vue";
-import { Plus, Upload, Download, FileText } from "lucide-vue-next";
+import { Plus, Upload, Download, FileText, Package } from "lucide-vue-next";
 import RuleCard from "../components/RuleCard.vue";
 import RuleEditor from "../components/RuleEditor.vue";
 import FilterBar, { type FilterState } from "../components/FilterBar.vue";
@@ -18,7 +18,11 @@ const selectedId = ref<string | null>(null);
 const editorRule = ref<Rule | undefined>(undefined);
 const showEditor = ref(false);
 const showImport = ref(false);
+const showImportBundle = ref(false);
 const importText = ref("");
+const importBundleText = ref("");
+const importBundleParsed = ref<any>(null);
+const importMode = ref<"merge" | "replace">("merge");
 
 const filtered = computed(() => rules.value.filter((r) => {
   const f = filters.value;
@@ -111,6 +115,100 @@ async function handleExportPs1() {
     log("rule.export", "Exported rules as .ps1 script");
   } catch (e) { log("rule.export", `Failed: ${e}`, "error"); }
 }
+
+async function handleExportBundle() {
+  try {
+    let groups: any[] = [];
+    if ("__TAURI__" in window || "__TAURI_INTERNALS__" in window) {
+      const { getSettings } = await import("../hooks/useTauri");
+      const s = await getSettings();
+      groups = s.groups ?? [];
+    }
+    const bundle = {
+      format: "wsl-porthole-bundle",
+      version: 2,
+      exported: new Date().toISOString(),
+      rules: rules.value,
+      groups,
+    };
+    const json = JSON.stringify(bundle, null, 2);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+    a.download = `wsl-porthole-bundle-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    log("bundle.export", `Exported ${rules.value.length} rules + ${groups.length} groups`);
+    showToast(`Exported ${rules.value.length} rules and ${groups.length} groups`, "success");
+  } catch (e) { log("bundle.export", `Failed: ${e}`, "error"); showToast(`Export failed: ${e}`, "error"); }
+}
+
+function parseImportBundle() {
+  try {
+    const data = JSON.parse(importBundleText.value);
+    // Support both old format (version 1, rules only) and new bundle format
+    if (data.format === "wsl-porthole-bundle" || (data.rules && Array.isArray(data.rules))) {
+      importBundleParsed.value = {
+        rules: data.rules ?? [],
+        groups: data.groups ?? [],
+        format: data.format ?? "legacy",
+      };
+    } else {
+      importBundleParsed.value = null;
+      showToast("Invalid bundle format", "error");
+    }
+  } catch {
+    importBundleParsed.value = null;
+    showToast("Invalid JSON", "error");
+  }
+}
+
+async function handleImportBundle() {
+  if (!importBundleParsed.value) return;
+  const { rules: importedRules, groups: importedGroups } = importBundleParsed.value;
+  try {
+    if ("__TAURI__" in window || "__TAURI_INTERNALS__" in window) {
+      const { getRules, saveRules, getSettings, saveSettings } = await import("../hooks/useTauri");
+
+      // Handle rules
+      if (importMode.value === "replace") {
+        await saveRules(importedRules);
+      } else {
+        const existing = await getRules();
+        const existingPorts = new Set(existing.map((r: Rule) => `${r.listenPort.type === "single" ? r.listenPort.port : r.listenPort.start}-${r.direction}`));
+        const newRules = importedRules.filter((r: Rule) => {
+          const key = `${r.listenPort.type === "single" ? r.listenPort.port : r.listenPort.start}-${r.direction}`;
+          return !existingPorts.has(key);
+        });
+        // Give new IDs to avoid conflicts
+        for (const r of newRules) r.id = crypto.randomUUID();
+        await saveRules([...existing, ...newRules]);
+      }
+      refreshRules();
+
+      // Handle groups
+      if (importedGroups.length) {
+        const s = await getSettings();
+        if (importMode.value === "replace") {
+          s.groups = importedGroups;
+        } else {
+          const existingNames = new Set((s.groups ?? []).map((g: any) => g.name));
+          const newGroups = importedGroups.filter((g: any) => !existingNames.has(g.name));
+          for (const g of newGroups) g.id = crypto.randomUUID();
+          s.groups = [...(s.groups ?? []), ...newGroups];
+        }
+        await saveSettings(s);
+      }
+
+      const msg = importMode.value === "replace"
+        ? `Replaced with ${importedRules.length} rules and ${importedGroups.length} groups`
+        : `Merged ${importedRules.length} rules and ${importedGroups.length} groups`;
+      log("bundle.import", msg);
+      showToast(msg, "success");
+    }
+  } catch (e) { log("bundle.import", `Failed: ${e}`, "error"); showToast(`Import failed: ${e}`, "error"); }
+  showImportBundle.value = false;
+  importBundleText.value = "";
+  importBundleParsed.value = null;
+}
 </script>
 
 <template>
@@ -120,8 +218,8 @@ async function handleExportPs1() {
         Port Rules <span class="text-sm font-normal ml-2" :style="{ color: 'var(--text-secondary)' }">{{ filtered.length }} of {{ rules.length }}</span>
       </h2>
       <div class="flex items-center gap-2">
-        <button @click="showImport = true" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg" :style="{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }" title="Import rules from a netsh portproxy script"><Upload :size="12" /> Import</button>
-        <button @click="handleExport" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg" :style="{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }" title="Export all rules as a JSON file"><Download :size="12" /> JSON</button>
+        <button @click="showImportBundle = true" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg" :style="{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }" title="Import rules + groups from a bundle file"><Upload :size="12" /> Import</button>
+        <button @click="handleExportBundle" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg" :style="{ color: 'var(--accent)', border: '1px solid var(--accent-dim)' }" title="Export all rules + groups as a transferable bundle"><Package :size="12" /> Export Bundle</button>
         <button @click="handleExportPs1" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg" :style="{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }" title="Export rules as a PowerShell netsh script"><FileText :size="12" /> .ps1</button>
         <button @click="editorRule = undefined; showEditor = true" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium" :style="{ background: 'var(--accent)', color: 'var(--bg-primary)' }" title="Create a new port forwarding rule"><Plus :size="12" /> Add Rule</button>
       </div>
@@ -140,18 +238,60 @@ async function handleExportPs1() {
 
     <RuleEditor v-if="showEditor" :rule="editorRule" @save="handleSave" @cancel="showEditor = false; editorRule = undefined" />
 
-    <!-- Import modal -->
-    <div v-if="showImport" class="fixed inset-0 z-50 flex items-center justify-center" style="background: rgba(0,0,0,0.6)">
-      <div class="w-[560px] rounded-xl p-6 shadow-2xl" :style="{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }">
-        <h3 class="text-base font-semibold mb-3" :style="{ color: 'var(--text-primary)' }">Import netsh Script</h3>
-        <p class="text-xs mb-3" :style="{ color: 'var(--text-secondary)' }">Paste a netsh portproxy script. Hardcoded IPs will be replaced with ${'${WSL_IP}'}.</p>
-        <textarea v-model="importText" class="w-full h-48 p-3 text-xs font-mono rounded-lg outline-none resize-none"
-          :style="{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }"
-          placeholder="netsh interface portproxy add v4tov4 listenport=80 ..." />
-        <div class="flex justify-end gap-2 mt-4">
-          <button @click="showImport = false; importText = ''" class="px-4 py-1.5 text-sm rounded-lg" :style="{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }">Cancel</button>
-          <button @click="handleImport" class="px-4 py-1.5 text-sm rounded-lg font-medium" :style="{ background: 'var(--accent)', color: 'var(--bg-primary)' }">Import</button>
+    <!-- Import Bundle modal -->
+    <div v-if="showImportBundle" class="fixed inset-0 z-50 flex items-center justify-center" style="background: rgba(0,0,0,0.6)">
+      <div class="w-[600px] rounded-xl p-6 shadow-2xl" :style="{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }">
+        <h3 class="text-base font-semibold mb-2" :style="{ color: 'var(--text-primary)' }">Import Rules & Groups</h3>
+        <p class="text-xs mb-3" :style="{ color: 'var(--text-secondary)' }">
+          Paste a WSL PortHole bundle JSON, or a netsh portproxy script.
+        </p>
+
+        <!-- Tab selector -->
+        <div class="flex gap-2 mb-3">
+          <button @click="showImport = false" class="text-xs px-3 py-1 rounded-lg"
+            :style="{ background: !showImport ? 'var(--accent-dim)' : 'var(--bg-tertiary)', color: 'var(--text-primary)' }">Bundle (JSON)</button>
+          <button @click="showImport = true" class="text-xs px-3 py-1 rounded-lg"
+            :style="{ background: showImport ? 'var(--accent-dim)' : 'var(--bg-tertiary)', color: 'var(--text-primary)' }">netsh Script</button>
         </div>
+
+        <!-- Bundle JSON tab -->
+        <template v-if="!showImport">
+          <textarea v-model="importBundleText" @input="parseImportBundle" class="w-full h-40 p-3 text-xs font-mono rounded-lg outline-none resize-none"
+            :style="{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }"
+            placeholder='Paste bundle JSON here (exported via "Export Bundle")...' />
+          <div v-if="importBundleParsed" class="mt-3 p-3 rounded-lg text-xs" :style="{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }">
+            <div class="flex items-center gap-4 mb-2">
+              <span><strong :style="{ color: 'var(--accent)' }">{{ importBundleParsed.rules.length }}</strong> rules</span>
+              <span><strong :style="{ color: 'var(--accent)' }">{{ importBundleParsed.groups.length }}</strong> groups</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <label class="flex items-center gap-1.5 cursor-pointer">
+                <input type="radio" v-model="importMode" value="merge" class="accent-[var(--accent)]" />
+                <span>Merge (add new, skip duplicates)</span>
+              </label>
+              <label class="flex items-center gap-1.5 cursor-pointer">
+                <input type="radio" v-model="importMode" value="replace" class="accent-[var(--accent)]" />
+                <span :style="{ color: 'var(--status-warn)' }">Replace all existing</span>
+              </label>
+            </div>
+          </div>
+          <div class="flex justify-end gap-2 mt-4">
+            <button @click="showImportBundle = false; importBundleText = ''; importBundleParsed = null" class="px-4 py-1.5 text-sm rounded-lg" :style="{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }">Cancel</button>
+            <button @click="handleImportBundle" :disabled="!importBundleParsed" class="px-4 py-1.5 text-sm rounded-lg font-medium"
+              :style="{ background: importBundleParsed ? 'var(--accent)' : 'var(--accent-dim)', color: 'var(--bg-primary)' }">Import Bundle</button>
+          </div>
+        </template>
+
+        <!-- netsh script tab -->
+        <template v-else>
+          <textarea v-model="importText" class="w-full h-40 p-3 text-xs font-mono rounded-lg outline-none resize-none"
+            :style="{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }"
+            placeholder="netsh interface portproxy add v4tov4 listenport=80 ..." />
+          <div class="flex justify-end gap-2 mt-4">
+            <button @click="showImportBundle = false; importText = ''" class="px-4 py-1.5 text-sm rounded-lg" :style="{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }">Cancel</button>
+            <button @click="handleImport; showImportBundle = false" class="px-4 py-1.5 text-sm rounded-lg font-medium" :style="{ background: 'var(--accent)', color: 'var(--bg-primary)' }">Import Script</button>
+          </div>
+        </template>
       </div>
     </div>
   </div>

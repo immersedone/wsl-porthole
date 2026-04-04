@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { ref, inject, onMounted, type Ref } from "vue";
-import { FolderOpen, Plus, Power, Trash2, Edit2, Check, X, ChevronDown, ChevronUp } from "lucide-vue-next";
+import { FolderOpen, Plus, Power, Trash2, Edit2, Check, X, ChevronDown, ChevronUp, Download, Upload } from "lucide-vue-next";
 import type { Rule } from "../types";
 import { useAuditLog } from "../hooks/useAuditLog";
+import { useToast } from "../hooks/useToast";
 import { isTauri } from "../lib/tauri";
 
 const rules = inject<Ref<Rule[]>>("rules")!;
 const refreshRules = inject<() => void>("refreshRules")!;
 const { log } = useAuditLog();
+const { show: showToast } = useToast();
 
 interface RuleGroup { id: string; name: string; ruleIds: string[]; enabled: boolean; startupBehavior: string }
 
@@ -74,6 +76,69 @@ async function deleteGroup(id: string) {
   await persist();
 }
 
+function exportGroups() {
+  const data = {
+    format: "wsl-porthole-groups",
+    version: 1,
+    exported: new Date().toISOString(),
+    groups: groups.value,
+    // Include referenced rules so they can be imported on another machine
+    rules: rules.value.filter(r => groups.value.some(g => g.ruleIds.includes(r.id))),
+  };
+  const json = JSON.stringify(data, null, 2);
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+  a.download = `wsl-porthole-groups-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  log("groups.export", `Exported ${groups.value.length} groups`);
+  showToast(`Exported ${groups.value.length} groups with their rules`, "success");
+}
+
+async function importGroups() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".json";
+  input.onchange = async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      const importedGroups = data.groups ?? [];
+      const importedRules = data.rules ?? [];
+
+      if (!importedGroups.length) {
+        showToast("No groups found in file", "warn");
+        return;
+      }
+
+      // Import rules that don't exist yet
+      if (importedRules.length && isTauri) {
+        const { getRules, saveRules } = await import("../hooks/useTauri");
+        const existing = await getRules();
+        const existingIds = new Set(existing.map((r: Rule) => r.id));
+        const newRules = importedRules.filter((r: Rule) => !existingIds.has(r.id));
+        if (newRules.length) {
+          await saveRules([...existing, ...newRules]);
+          refreshRules();
+        }
+      }
+
+      // Import groups that don't exist yet
+      const existingNames = new Set(groups.value.map(g => g.name));
+      const newGroups = importedGroups.filter((g: RuleGroup) => !existingNames.has(g.name));
+      for (const g of newGroups) groups.value.push(g);
+      await persist();
+
+      log("groups.import", `Imported ${newGroups.length} groups and ${importedRules.length} rules`);
+      showToast(`Imported ${newGroups.length} new groups`, "success");
+    } catch (e) {
+      showToast(`Import failed: ${e}`, "error");
+    }
+  };
+  input.click();
+}
+
 function startEdit(g: RuleGroup) {
   editingId.value = g.id;
   editName.value = g.name;
@@ -121,6 +186,13 @@ function portDisplay(r: Rule) {
     <div class="flex items-center gap-2 mb-6">
       <input v-model="newName" @keydown.enter="addGroup" placeholder="New group name..." class="flex-1 px-3 py-1.5 text-sm rounded-lg outline-none"
         :style="{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }" />
+      <button @click="importGroups" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg"
+        :style="{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }"
+        title="Import groups from a file"><Upload :size="12" /> Import</button>
+      <button @click="exportGroups" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg"
+        :style="{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }"
+        :disabled="!groups.length"
+        title="Export all groups with their rules"><Download :size="12" /> Export</button>
       <button @click="addGroup" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium"
         :style="{ background: 'var(--accent)', color: 'var(--bg-primary)' }"
         title="Create a new rule group"><Plus :size="12" /> Add Group</button>
