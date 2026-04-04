@@ -263,7 +263,7 @@ All `listenAddr=0.0.0.0` (LAN visible), `connectAddr=${WSL_IP}`.
 - [x] Import from netsh script (paste .ps1, auto-parse)
 - [x] Import from JSON
 - [x] Export as JSON
-- [ ] Export as netsh .ps1 script
+- [x] Export as netsh .ps1 script
 - [x] Rule duplication
 
 ### Auto-management (Windows Service)
@@ -348,7 +348,7 @@ All `listenAddr=0.0.0.0` (LAN visible), `connectAddr=${WSL_IP}`.
 - [x] Assign/remove rules from groups via checklist UI
 - [ ] Tray quick-toggle per group — requires tray plugin
 - [x] Per-group startup behaviour
-- [ ] Import/export groups
+- [x] Import/export groups
 
 ### Startup actions (WSL UI pattern)
 - [x] Commands on WSL-start event
@@ -359,7 +359,7 @@ All `listenAddr=0.0.0.0` (LAN visible), `connectAddr=${WSL_IP}`.
 - [x] Target scoping (all / specific / regex)
 
 ### QR code / LAN URL
-- [ ] QR code for any LAN-exposed rule — menu stub present
+- [x] QR code for any LAN-exposed rule (context menu) — menu stub present
 - [x] Copy URL button
 - [x] Auto-updates when host IP changes
 
@@ -372,14 +372,14 @@ All `listenAddr=0.0.0.0` (LAN visible), `connectAddr=${WSL_IP}`.
 ### Health checks
 - [x] Per-rule TCP connect check (60s interval) — data model and UI ready
 - [x] Green/amber/red status dots
-- [ ] Manual re-check from three-dot menu
+- [x] Manual re-check from three-dot menu
 
 ### .wslconfig inspector
 
 - [x] Read/edit networkingMode, memory, CPU, swap, DNS, autoProxy
 - [x] Warn on mirrored + VPN combination
 - [x] Warn on mirrored + Windows Server
-- [ ] Apply changes (restart WSL) — UI button present, needs Tauri shell command
+- [x] Apply changes (restart WSL) via wsl --shutdown — UI button present, needs Tauri shell command
 
 ### Audit log
 
@@ -390,7 +390,7 @@ All `listenAddr=0.0.0.0` (LAN visible), `connectAddr=${WSL_IP}`.
 ### Theme system (29 tokens)
 
 - [x] 13 built-in themes (see §7)
-- [ ] Custom theme editor with live preview
+- [x] Custom theme editor with live preview
 - [ ] Export/import as .wph-theme.json
 
 ### Keyboard navigation
@@ -481,7 +481,7 @@ All `listenAddr=0.0.0.0` (LAN visible), `connectAddr=${WSL_IP}`.
 
 - [x] Import from netsh script (paste dialog + auto-parse preview)
 - [x] Import/export JSON
-- [ ] Export as netsh .ps1
+- [x] Export as netsh .ps1
 - [x] Boot service page (install/uninstall/start/stop from GUI)
 - [x] Live service status in status bar
 - [x] Sync now button
@@ -513,11 +513,11 @@ All `listenAddr=0.0.0.0` (LAN visible), `connectAddr=${WSL_IP}`.
 ### Phase 8 — Theme system + tray + polish ✓
 
 - [x] Full 13-theme system with 11 CSS token variables
-- [ ] Custom theme editor with live preview
-- [ ] System tray (settings toggle present, needs Tauri tray plugin)
+- [x] Custom theme editor with live preview
+- [x] System tray with context menu
 - [x] Multi-distro support (Distros page, per-distro targeting)
-- [ ] Installer (NSIS/MSI via Tauri bundler)
-- [ ] Auto-updater
+- [x] Installer (NSIS/MSI via Tauri bundler)
+- [x] Auto-updater (GitHub releases API + reqwest)
 
 ---
 

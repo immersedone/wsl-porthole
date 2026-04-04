@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, inject, onMounted, type Ref } from "vue";
-import { Plus, Upload, Download, FileText, Package, FolderOpen } from "lucide-vue-next";
+import { Plus, Upload, Download, FileText, Package, FolderOpen, X } from "lucide-vue-next";
 import RuleCard from "../components/RuleCard.vue";
+import QrCode from "../components/QrCode.vue";
 import RuleEditor from "../components/RuleEditor.vue";
 import FilterBar, { type FilterState } from "../components/FilterBar.vue";
 import type { Rule } from "../types";
@@ -23,6 +24,7 @@ const importText = ref("");
 const importBundleText = ref("");
 const importBundleParsed = ref<any>(null);
 const importMode = ref<"merge" | "replace">("merge");
+const qrUrl = ref<string | null>(null);
 const viewMode = ref<"flat" | "grouped">("flat");
 const groups = ref<any[]>([]);
 
@@ -137,6 +139,21 @@ function handleExport() {
   log("rule.export", "Exported rules as JSON");
   showToast("Rules exported as JSON", "success");
 }
+async function handleHealthCheck(id: string) {
+  try {
+    if ("__TAURI__" in window || "__TAURI_INTERNALS__" in window) {
+      const { checkHealth } = await import("../hooks/useTauri");
+      const results = await checkHealth();
+      const result = results.find((r: any) => r.ruleId === id);
+      if (result) {
+        const rule = rules.value.find(r => r.id === id);
+        if (rule) rule.health = result.status as any;
+        showToast(`Health: ${result.reachable}/${result.total} ports reachable`, result.status === "ok" ? "success" : "warn");
+      }
+    }
+  } catch (e) { showToast(`Health check failed: ${e}`, "error"); }
+}
+
 async function handleExportPs1() {
   try {
     if (!("__TAURI__" in window)) return;
@@ -277,7 +294,8 @@ async function handleImportBundle() {
         </div>
         <RuleCard v-for="rule in group.rules" :key="rule.id" :rule="rule" :selected="selectedId === rule.id"
           @toggle="handleToggle" @edit="(r) => { editorRule = r; showEditor = true }" @delete="handleDelete"
-          @duplicate="handleDuplicate" @select="selectedId = rule.id" />
+          @duplicate="handleDuplicate" @select="selectedId = rule.id" @qr="(url) => qrUrl = url"
+          @health-check="handleHealthCheck" />
       </template>
       <div v-if="filtered.length === 0" class="text-center py-12" :style="{ color: 'var(--text-secondary)' }">
         {{ rules.length === 0 ? "No rules yet. Add one or import from a netsh script." : "No rules match the current filters." }}
@@ -340,6 +358,18 @@ async function handleImportBundle() {
             <button @click="handleImport; showImportBundle = false" class="px-4 py-1.5 text-sm rounded-lg font-medium" :style="{ background: 'var(--accent)', color: 'var(--bg-primary)' }">Import Script</button>
           </div>
         </template>
+      </div>
+    </div>
+
+    <!-- QR Code modal -->
+    <div v-if="qrUrl" class="fixed inset-0 z-50 flex items-center justify-center" style="background: rgba(0,0,0,0.6)" @click.self="qrUrl = null">
+      <div class="rounded-xl p-6 shadow-2xl text-center" :style="{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-sm font-semibold" :style="{ color: 'var(--text-primary)' }">Scan to access</h3>
+          <button @click="qrUrl = null" :style="{ color: 'var(--text-secondary)' }"><X :size="16" /></button>
+        </div>
+        <QrCode :url="qrUrl" :size="200" />
+        <p class="mt-3 text-xs font-mono" :style="{ color: 'var(--accent)' }">{{ qrUrl }}</p>
       </div>
     </div>
   </div>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
-import { AlertTriangle, Save, RefreshCw } from "lucide-vue-next";
+import { AlertTriangle, Save, RefreshCw, RotateCcw } from "lucide-vue-next";
 import { useAuditLog } from "../hooks/useAuditLog";
 import { isTauri } from "../lib/tauri";
 
@@ -78,6 +78,15 @@ async function save() {
   } catch (e) { log("wslconfig.save", `Failed: ${e}`, "error"); }
 }
 
+async function restartWsl() {
+  if (!isTauri) return;
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("plugin:shell|execute", { program: "wsl", args: ["--shutdown"] });
+    log("wslconfig.restart", "WSL shutdown initiated");
+  } catch (e) { log("wslconfig.restart", `Failed: ${e}`, "error"); }
+}
+
 onMounted(load);
 
 const warnings = computed(() => {
@@ -103,6 +112,7 @@ const sections = computed(() => {
       <div class="flex items-center gap-2">
         <button @click="load" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg" :style="{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }"><RefreshCw :size="12" :class="{ 'animate-spin': loading }" /> Reload</button>
         <button @click="save" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium" :style="{ background: 'var(--accent)', color: 'var(--bg-primary)' }"><Save :size="12" /> Save</button>
+        <button @click="restartWsl" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg" :style="{ color: 'var(--status-warn)', border: '1px solid var(--status-warn)' }" title="Shutdown WSL to apply .wslconfig changes (wsl --shutdown)"><RotateCcw :size="12" /> Restart WSL</button>
       </div>
     </div>
     <div v-if="warnings.length" class="rounded-lg p-3 mb-4" :style="{ background: 'var(--bg-secondary)', border: '1px solid var(--status-warn)' }">

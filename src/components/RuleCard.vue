@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from "vue";
-import { MoreVertical, ArrowRight, Globe, Lock, Copy, Edit2, Trash2, ExternalLink, Terminal, Power } from "lucide-vue-next";
-import type { Rule } from "../types";
+import { MoreVertical, ArrowRight, Globe, Lock, Copy, Edit2, Trash2, ExternalLink, Terminal, Power, QrCode as QrIcon } from "lucide-vue-next";
+import type { Rule, StatusInfo } from "../types";
 
 const props = defineProps<{ rule: Rule; selected: boolean }>();
 const emit = defineEmits<{
   toggle: [id: string]; edit: [rule: Rule]; delete: [id: string];
-  duplicate: [rule: Rule]; select: [];
+  duplicate: [rule: Rule]; select: []; qr: [url: string]; healthCheck: [id: string];
 }>();
 
 const menuOpen = ref(false);
@@ -36,6 +36,11 @@ function copyCmd() {
   const lp = props.rule.listenPort.type === "single" ? props.rule.listenPort.port : props.rule.listenPort.start;
   const cp = props.rule.connectPort.type === "single" ? props.rule.connectPort.port : props.rule.connectPort.start;
   navigator.clipboard.writeText(`netsh interface portproxy add v4tov4 listenport=${lp} listenaddress=${props.rule.listenAddr} connectport=${cp} connectaddress=${props.rule.connectAddr}`);
+}
+
+function getLanUrl() {
+  const port = props.rule.listenPort.type === "single" ? props.rule.listenPort.port : props.rule.listenPort.start;
+  return `http://localhost:${port}`;
 }
 
 async function openInBrowser() {
@@ -95,9 +100,14 @@ async function openInBrowser() {
         <button @click="menuOpen = false; emit('edit', rule)" class="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:opacity-80 hover-highlight" :style="{ color: 'var(--text-primary)' }"><Edit2 :size="12" /> Edit</button>
         <button @click="menuOpen = false; emit('duplicate', rule)" class="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:opacity-80 hover-highlight" :style="{ color: 'var(--text-primary)' }"><Copy :size="12" /> Duplicate</button>
         <button @click="copyCmd" class="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:opacity-80 hover-highlight" :style="{ color: 'var(--text-primary)' }"><Terminal :size="12" /> Copy command</button>
+        <button @click="menuOpen = false; emit('healthCheck', rule.id)" class="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:opacity-80 hover-highlight" :style="{ color: 'var(--text-primary)' }">
+          <span class="w-3 h-3 rounded-full border" :style="{ borderColor: healthColor }" /> Check health
+        </button>
         <template v-if="rule.lan">
           <button @click="menuOpen = false; openInBrowser()"
             class="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:opacity-80 hover-highlight" :style="{ color: 'var(--text-primary)' }"><ExternalLink :size="12" /> Open in browser</button>
+          <button @click="menuOpen = false; emit('qr', getLanUrl())"
+            class="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:opacity-80 hover-highlight" :style="{ color: 'var(--text-primary)' }"><QrIcon :size="12" /> QR code</button>
         </template>
         <div class="my-1" :style="{ borderTop: '1px solid var(--border)' }" />
         <button @click="menuOpen = false; emit('delete', rule.id)" class="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:opacity-80 hover-highlight" :style="{ color: 'var(--status-err)' }"><Trash2 :size="12" /> Delete</button>

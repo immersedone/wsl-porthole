@@ -109,6 +109,49 @@ fn main() {
                 })
                 .build(app)?;
 
+            // Screenshot automation: if SCREENSHOT_MODE env var is set,
+            // cycle through all pages and take screenshots
+            if std::env::var("WSL_PORTHOLE_SCREENSHOTS").is_ok() {
+                let window = app.get_webview_window("main").unwrap();
+                let out_dir = std::env::var("WSL_PORTHOLE_SCREENSHOT_DIR")
+                    .unwrap_or_else(|_| r"C:\Users\Immersed\Desktop\wsl-screenshots".into());
+                std::fs::create_dir_all(&out_dir).ok();
+
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+                    let pages = [
+                        "rules", "groups", "docker", "mcp", "lan", "firewall",
+                        "distros", "startup", "service", "wslconfig", "audit",
+                        "appearance", "updates", "settings",
+                    ];
+                    let names = [
+                        "01-rules", "02-groups", "03-docker", "04-mcp", "05-lan",
+                        "06-firewall", "07-distros", "08-startup", "09-service",
+                        "10-wslconfig", "11-audit", "12-appearance", "13-updates",
+                        "14-settings",
+                    ];
+
+                    for (page, name) in pages.iter().zip(names.iter()) {
+                        let js = format!("window.__navigateTo && window.__navigateTo('{page}')");
+                        let _ = window.eval(&js);
+                        // Wait for Vue to render the page change
+                        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+                        // Signal PowerShell to take screenshot
+                        let marker = format!("{out_dir}\\__ready_{name}");
+                        let _ = std::fs::write(&marker, "ready");
+                        tracing::info!("Screenshot ready: {name}");
+                        // Wait for PowerShell to capture before navigating again
+                        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                    }
+
+                    // Signal completion
+                    let _ = std::fs::write(format!("{out_dir}\\__done"), "done");
+                    tracing::info!("Screenshot automation complete");
+                });
+            }
+
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -140,6 +183,7 @@ fn main() {
             commands::export_netsh_script,
             commands::list_distros,
             commands::diagnose,
+            commands::navigate_to,
             commands::write_hosts_entry,
             commands::inject_env_var,
             commands::get_firewall_rules,

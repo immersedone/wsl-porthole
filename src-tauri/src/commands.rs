@@ -209,6 +209,14 @@ pub fn detect_ips() -> serde_json::Value {
 #[tauri::command]
 pub fn sync_now() -> Result<String, String> { apply_rules() }
 
+// ---------- Navigation (for screenshot automation) ----------
+
+#[tauri::command]
+pub fn navigate_to(page: String, window: tauri::WebviewWindow) -> Result<(), String> {
+    window.eval(&format!("window.__navigateTo && window.__navigateTo('{page}')"))
+        .map_err(|e| e.to_string())
+}
+
 // ---------- Diagnostics ----------
 
 #[tauri::command]

@@ -44,7 +44,7 @@ async function refreshStatus() {
     const { getStatus } = await import("./hooks/useTauri");
     status.value = await getStatus();
     if (status.value) startupError.value = null;
-  } catch (e) {
+  } catch (e: any) {
     startupError.value = `Status check failed: ${e}`;
   }
 }
@@ -61,6 +61,12 @@ async function refreshRules() {
 
 provide("refreshRules", refreshRules);
 provide("refreshStatus", refreshStatus);
+
+// Expose navigation for external automation (screenshots)
+if (typeof window !== "undefined") {
+  (window as any).__navigateTo = (page: Page) => { activePage.value = page; };
+}
+
 
 let interval: ReturnType<typeof setInterval>;
 onMounted(async () => {
