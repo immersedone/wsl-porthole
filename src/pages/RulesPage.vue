@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, inject, type Ref } from "vue";
-import { Plus, Upload, Download, FileText, Package } from "lucide-vue-next";
+import { ref, computed, inject, onMounted, type Ref } from "vue";
+import { Plus, Upload, Download, FileText, Package, FolderOpen } from "lucide-vue-next";
 import RuleCard from "../components/RuleCard.vue";
 import RuleEditor from "../components/RuleEditor.vue";
 import FilterBar, { type FilterState } from "../components/FilterBar.vue";
@@ -23,6 +23,20 @@ const importText = ref("");
 const importBundleText = ref("");
 const importBundleParsed = ref<any>(null);
 const importMode = ref<"merge" | "replace">("merge");
+const viewMode = ref<"flat" | "grouped">("flat");
+const groups = ref<any[]>([]);
+
+async function loadGroups() {
+  if (!("__TAURI__" in window) && !("__TAURI_INTERNALS__" in window)) return;
+  try {
+    const { getSettings } = await import("../hooks/useTauri");
+    const s = await getSettings();
+    groups.value = s.groups ?? [];
+  } catch {}
+}
+
+// Load groups on component mount for grouped view
+onMounted(loadGroups);
 
 const filtered = computed(() => rules.value.filter((r) => {
   const f = filters.value;
@@ -36,6 +50,23 @@ const filtered = computed(() => rules.value.filter((r) => {
   if (f.enabled === "disabled" && r.enabled) return false;
   return true;
 }));
+
+interface GroupedRules { name: string; id: string | null; rules: Rule[] }
+const groupedFiltered = computed((): GroupedRules[] => {
+  if (viewMode.value === "flat") return [{ name: "", id: null, rules: filtered.value }];
+  const result: GroupedRules[] = [];
+  const assigned = new Set<string>();
+  for (const g of groups.value) {
+    const grpRules = filtered.value.filter(r => g.ruleIds?.includes(r.id));
+    if (grpRules.length) {
+      result.push({ name: g.name, id: g.id, rules: grpRules });
+      grpRules.forEach(r => assigned.add(r.id));
+    }
+  }
+  const ungrouped = filtered.value.filter(r => !assigned.has(r.id));
+  if (ungrouped.length) result.push({ name: "Ungrouped", id: null, rules: ungrouped });
+  return result;
+});
 
 async function handleToggle(id: string) {
   try {
@@ -225,12 +256,29 @@ async function handleImportBundle() {
       </div>
     </div>
 
-    <FilterBar v-model="filters" />
+    <div class="flex items-center gap-3 mb-4">
+      <div class="flex-1"><FilterBar v-model="filters" /></div>
+      <select v-model="viewMode" class="text-xs px-2 py-1 rounded shrink-0 h-8"
+        :style="{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }"
+        title="Switch between flat list and grouped view">
+        <option value="flat">Flat view</option>
+        <option value="grouped">By group</option>
+      </select>
+    </div>
 
     <div class="space-y-1.5">
-      <RuleCard v-for="rule in filtered" :key="rule.id" :rule="rule" :selected="selectedId === rule.id"
-        @toggle="handleToggle" @edit="(r) => { editorRule = r; showEditor = true }" @delete="handleDelete"
-        @duplicate="handleDuplicate" @select="selectedId = rule.id" />
+      <template v-for="group in groupedFiltered" :key="group.id ?? 'ungrouped'">
+        <!-- Group header (only in grouped mode) -->
+        <div v-if="viewMode === 'grouped' && group.name" class="flex items-center gap-2 pt-3 pb-1 px-1">
+          <FolderOpen :size="14" :style="{ color: 'var(--accent)' }" />
+          <span class="text-xs font-semibold uppercase tracking-wider" :style="{ color: 'var(--accent)' }">{{ group.name }}</span>
+          <span class="text-[10px]" :style="{ color: 'var(--text-secondary)' }">{{ group.rules.length }} rules</span>
+          <div class="flex-1 border-b" :style="{ borderColor: 'var(--border)' }" />
+        </div>
+        <RuleCard v-for="rule in group.rules" :key="rule.id" :rule="rule" :selected="selectedId === rule.id"
+          @toggle="handleToggle" @edit="(r) => { editorRule = r; showEditor = true }" @delete="handleDelete"
+          @duplicate="handleDuplicate" @select="selectedId = rule.id" />
+      </template>
       <div v-if="filtered.length === 0" class="text-center py-12" :style="{ color: 'var(--text-secondary)' }">
         {{ rules.length === 0 ? "No rules yet. Add one or import from a netsh script." : "No rules match the current filters." }}
       </div>
