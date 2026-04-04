@@ -23,16 +23,30 @@ rsync -av --delete \
   /var/www/vhosts/wsl-porthole/ /mnt/c/wsl-porthole-build/
 ```
 
-## Build Steps (Windows PowerShell)
+## Build Steps
+
+### Option A: From WSL (recommended)
+
+Run everything from WSL using `powershell.exe`. Node and Cargo need explicit PATH entries:
+
+```bash
+# Install frontend dependencies
+powershell.exe -Command "\$env:PATH = 'C:\Program Files\nodejs;C:\Users\Immersed\.cargo\bin;' + \$env:PATH; cd 'C:\wsl-porthole-build'; npm install"
+
+# Build Tauri app (NSIS + MSI installers)
+powershell.exe -Command "\$env:PATH = 'C:\Program Files\nodejs;C:\Users\Immersed\.cargo\bin;' + \$env:PATH; cd 'C:\wsl-porthole-build'; npx tauri build"
+
+# Build service binary
+powershell.exe -Command "\$env:PATH = 'C:\Users\Immersed\.cargo\bin;' + \$env:PATH; cd 'C:\wsl-porthole-build'; cargo build --release -p wsl-porthole-service"
+```
+
+### Option B: From Windows PowerShell
 
 ```powershell
 cd C:\wsl-porthole-build
-
-# Install frontend dependencies
 npm install
-
-# Build the Tauri app (NSIS + MSI installers)
 npx tauri build
+cargo build --release -p wsl-porthole-service
 ```
 
 ### Output locations
