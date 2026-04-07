@@ -29,9 +29,12 @@ async function refresh() {
 // Auto-refresh when engine changes
 watch(engine, () => refresh());
 
-onMounted(refresh);
-const iv = setInterval(refresh, 30000);
-onUnmounted(() => clearInterval(iv));
+let iv: ReturnType<typeof setInterval> | null = null;
+onMounted(() => {
+  refresh();
+  iv = setInterval(refresh, 30000);
+});
+onUnmounted(() => { if (iv) clearInterval(iv); });
 
 const grouped = computed(() => {
   const m: Record<string, ContainerSummary[]> = {};

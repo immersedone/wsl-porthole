@@ -73,6 +73,7 @@ export interface McpServerInfo {
 }
 
 export interface AuditEntry {
+  id?: number;
   timestamp: string;
   event: string;
   detail: string;

@@ -68,11 +68,24 @@ if (typeof window !== "undefined") {
 }
 
 
-let interval: ReturnType<typeof setInterval>;
+let interval: ReturnType<typeof setInterval> | null = null;
+
+function startPolling() {
+  if (!interval) interval = setInterval(refreshStatus, 10000);
+}
+function stopPolling() {
+  if (interval) { clearInterval(interval); interval = null; }
+}
+function onVisibilityChange() {
+  if (document.hidden) stopPolling();
+  else { refreshStatus(); startPolling(); }
+}
+
 onMounted(async () => {
   refreshStatus();
   refreshRules();
-  interval = setInterval(refreshStatus, 10000);
+  startPolling();
+  document.addEventListener("visibilitychange", onVisibilityChange);
 
   // Run diagnostics on startup to catch issues early
   if (isTauri) {
@@ -89,7 +102,8 @@ onMounted(async () => {
   document.addEventListener("keydown", handleKeydown);
 });
 onUnmounted(() => {
-  clearInterval(interval);
+  stopPolling();
+  document.removeEventListener("visibilitychange", onVisibilityChange);
   document.removeEventListener("keydown", handleKeydown);
 });
 

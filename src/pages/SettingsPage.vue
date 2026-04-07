@@ -73,8 +73,13 @@ async function runDiagnostics() {
 
 onMounted(loadSettings);
 
-// Auto-save when any setting changes
-watch([startMinimized, minimizeToTray, healthCheckInterval, ipSettleDelay, pollingInterval, defaultListenAddr, toastOnIpChange, toastOnConflict], persist);
+// Auto-save when any setting changes (debounced to avoid excessive backend calls)
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+function debouncedPersist() {
+  if (persistTimer) clearTimeout(persistTimer);
+  persistTimer = setTimeout(persist, 500);
+}
+watch([startMinimized, minimizeToTray, healthCheckInterval, ipSettleDelay, pollingInterval, defaultListenAddr, toastOnIpChange, toastOnConflict], debouncedPersist);
 </script>
 
 <template>

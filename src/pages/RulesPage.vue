@@ -40,6 +40,7 @@ async function loadGroups() {
 // Load groups on component mount for grouped view
 onMounted(loadGroups);
 
+
 const filtered = computed(() => rules.value.filter((r) => {
   const f = filters.value;
   if (f.search && !r.name.toLowerCase().includes(f.search.toLowerCase())) return false;
@@ -104,13 +105,15 @@ async function handleDuplicate(rule: Rule) {
 }
 async function handleSave(partial: Partial<Rule>) {
   try {
+    let ruleId = partial.id;
     if (partial.id) {
       if ("__TAURI__" in window) { const { updateRule } = await import("../hooks/useTauri"); await updateRule(partial as Rule); refreshRules(); }
       else rules.value = rules.value.map((r) => r.id === partial.id ? { ...r, ...partial } as Rule : r);
       log("rule.update", `Updated "${partial.name}"`);
       showToast(`Updated "${partial.name}"`, "success");
     } else {
-      const nr: Rule = { id: crypto.randomUUID(), name: partial.name ?? "Untitled", direction: partial.direction ?? "winToWsl", listenAddr: partial.listenAddr ?? "0.0.0.0", listenPort: partial.listenPort ?? { type: "single", port: 8080 }, connectPort: partial.connectPort ?? { type: "single", port: 8080 }, connectAddr: partial.connectAddr ?? "${WSL_IP}", distro: partial.distro ?? null, lan: partial.lan ?? true, enabled: partial.enabled ?? true, source: partial.source ?? "manual", note: partial.note ?? null, health: "unknown" };
+      ruleId = crypto.randomUUID();
+      const nr: Rule = { id: ruleId, name: partial.name ?? "Untitled", direction: partial.direction ?? "winToWsl", listenAddr: partial.listenAddr ?? "0.0.0.0", listenPort: partial.listenPort ?? { type: "single", port: 8080 }, connectPort: partial.connectPort ?? { type: "single", port: 8080 }, connectAddr: partial.connectAddr ?? "${WSL_IP}", distro: partial.distro ?? null, lan: partial.lan ?? true, enabled: partial.enabled ?? true, source: partial.source ?? "manual", note: partial.note ?? null, health: "unknown" };
       if ("__TAURI__" in window) {
         const { addRule } = await import("../hooks/useTauri");
         const lp = nr.listenPort.type === "single" ? nr.listenPort.port! : nr.listenPort.start!;
@@ -122,6 +125,24 @@ async function handleSave(partial: Partial<Rule>) {
       }
       log("rule.add", `Added "${nr.name}"`);
       showToast(`Added "${nr.name}"`, "success");
+    }
+    // Persist group membership
+    if (ruleId && ("__TAURI__" in window || "__TAURI_INTERNALS__" in window)) {
+      const selectedGroupId = partial.group ?? null;
+      const { getSettings, saveSettings } = await import("../hooks/useTauri");
+      const s = await getSettings();
+      const grps = s.groups ?? [];
+      let changed = false;
+      for (const g of grps) {
+        if (!g.ruleIds) g.ruleIds = [];
+        if (g.id === selectedGroupId) {
+          if (!g.ruleIds.includes(ruleId)) { g.ruleIds.push(ruleId); changed = true; }
+        } else {
+          const idx = g.ruleIds.indexOf(ruleId);
+          if (idx !== -1) { g.ruleIds.splice(idx, 1); changed = true; }
+        }
+      }
+      if (changed) { s.groups = grps; await saveSettings(s); loadGroups(); }
     }
   } catch (e) { log("rule.save", `Failed: ${e}`, "error"); showToast(`Save failed: ${e}`, "error"); }
   showEditor.value = false; editorRule.value = undefined;
@@ -302,7 +323,7 @@ async function handleImportBundle() {
       </div>
     </div>
 
-    <RuleEditor v-if="showEditor" :rule="editorRule" @save="handleSave" @cancel="showEditor = false; editorRule = undefined" />
+    <RuleEditor v-if="showEditor" :rule="editorRule" :groups="groups" @save="handleSave" @cancel="showEditor = false; editorRule = undefined" />
 
     <!-- Import Bundle modal -->
     <div v-if="showImportBundle" class="fixed inset-0 z-50 flex items-center justify-center" style="background: rgba(0,0,0,0.6)">

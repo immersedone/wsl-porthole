@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed } from "vue";
 import { MoreVertical, ArrowRight, Globe, Lock, Copy, Edit2, Trash2, ExternalLink, Terminal, Power, QrCode as QrIcon } from "lucide-vue-next";
 import type { Rule, StatusInfo } from "../types";
 
@@ -10,13 +10,7 @@ const emit = defineEmits<{
 }>();
 
 const menuOpen = ref(false);
-const menuEl = ref<HTMLElement | null>(null);
 
-function onDocClick(e: MouseEvent) {
-  if (menuEl.value && !menuEl.value.contains(e.target as Node)) menuOpen.value = false;
-}
-onMounted(() => document.addEventListener("click", onDocClick));
-onUnmounted(() => document.removeEventListener("click", onDocClick));
 
 const healthColor = computed(() =>
   props.rule.health === "ok" ? "var(--status-ok)" : props.rule.health === "warn" ? "var(--status-warn)" : props.rule.health === "error" ? "var(--status-err)" : "var(--text-secondary)"
@@ -91,10 +85,11 @@ async function openInBrowser() {
     <span v-if="rule.conflict" class="text-[10px] px-1.5 py-0.5 rounded"
       :style="{ background: 'var(--status-warn)', color: '#000' }" :title="rule.conflict">conflict</span>
     <div class="flex-1" />
-    <div class="relative" ref="menuEl">
+    <div class="relative">
       <button @click.stop="menuOpen = !menuOpen" class="p-1 rounded hover:opacity-80" :style="{ color: 'var(--text-secondary)' }">
         <MoreVertical :size="14" />
       </button>
+      <div v-if="menuOpen" class="fixed inset-0 z-40" @click.stop="menuOpen = false" />
       <div v-if="menuOpen" class="absolute right-0 top-8 z-50 min-w-[160px] py-1 rounded-lg shadow-lg"
         :style="{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }">
         <button @click="menuOpen = false; emit('edit', rule)" class="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:opacity-80 hover-highlight" :style="{ color: 'var(--text-primary)' }"><Edit2 :size="12" /> Edit</button>

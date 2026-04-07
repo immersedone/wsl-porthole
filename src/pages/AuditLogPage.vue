@@ -8,11 +8,15 @@ const { entries, exportLog, clear } = useAuditLog();
 const levelFilter = ref<"all" | "info" | "warn" | "error">("all");
 const searchText = ref("");
 
-const filtered = computed(() => entries.value.filter((e) => {
-  if (levelFilter.value !== "all" && e.level !== levelFilter.value) return false;
-  if (searchText.value && !e.event.includes(searchText.value) && !e.detail.includes(searchText.value)) return false;
-  return true;
-}));
+const filtered = computed(() => {
+  const result = entries.value.filter((e) => {
+    if (levelFilter.value !== "all" && e.level !== levelFilter.value) return false;
+    if (searchText.value && !e.event.includes(searchText.value) && !e.detail.includes(searchText.value)) return false;
+    return true;
+  });
+  // Display newest first without mutating the source array
+  return result.slice().reverse();
+});
 
 function doExport() {
   const a = document.createElement("a");
@@ -42,7 +46,7 @@ const levelColor = (l: AuditEntry["level"]) => l === "error" ? "var(--status-err
       </select>
     </div>
     <div class="space-y-0.5">
-      <div v-for="(e, i) in filtered" :key="i" class="flex items-center gap-3 px-3 py-1.5 rounded text-xs font-mono"
+      <div v-for="(e, i) in filtered" :key="e.id ?? i" class="flex items-center gap-3 px-3 py-1.5 rounded text-xs font-mono"
         :style="{ background: i % 2 === 0 ? 'var(--bg-secondary)' : 'transparent' }">
         <span :style="{ color: 'var(--text-secondary)' }">{{ new Date(e.timestamp).toLocaleTimeString() }}</span>
         <span class="w-10 text-center uppercase text-[10px] font-bold" :style="{ color: levelColor(e.level) }">{{ e.level }}</span>
