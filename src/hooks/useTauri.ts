@@ -7,6 +7,7 @@ export const saveRules = (rules: Rule[]) => invoke<void>("save_rules", { rules }
 export const addRule = (params: {
   name: string; direction: string; listenAddr: string;
   listenPort: number; connectPort: number; connectAddr: string; lan: boolean;
+  distro: string | null;
 }) => invoke<Rule>("add_rule", params);
 export const updateRule = (rule: Rule) => invoke<void>("update_rule", { rule });
 export const deleteRule = (id: string) => invoke<void>("delete_rule", { id });

@@ -49,7 +49,7 @@ async function addPort(c: ContainerSummary, p: ContainerSummary["ports"][0]) {
   try {
     if (!("__TAURI__" in window)) return;
     const { addRule } = await import("../hooks/useTauri");
-    await addRule({ name: `${c.name}:${p.container_port}`, direction, listenAddr: "0.0.0.0", listenPort: p.host_port, connectPort: p.container_port, connectAddr, lan: engine.value === "wsl" });
+    await addRule({ name: `${c.name}:${p.container_port}`, direction, listenAddr: "0.0.0.0", listenPort: p.host_port, connectPort: p.container_port, connectAddr, lan: engine.value === "wsl", distro: null });
     refreshRules();
     log("docker.add_rule", `Added rule for ${c.name}:${p.container_port} (${engine.value} engine)`);
   } catch (e) { log("docker.add_rule", `Failed: ${e}`, "error"); }

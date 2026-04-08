@@ -25,6 +25,8 @@ const distros = ref<DistroInfo[]>([]);
 const editingAlias = ref<string | null>(null);
 const aliasInput = ref("");
 
+const CACHE_KEY = "wsl-porthole-distros-cache";
+
 function loadAliases(): Record<string, string> {
   try { return JSON.parse(localStorage.getItem("wsl-porthole-distro-aliases") ?? "{}"); } catch { return {}; }
 }
@@ -32,26 +34,44 @@ function saveAliases(aliases: Record<string, string>) {
   localStorage.setItem("wsl-porthole-distro-aliases", JSON.stringify(aliases));
 }
 
+function loadCache(): DistroInfo[] {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw);
+  } catch { return []; }
+}
+
+function saveCache(data: DistroInfo[]) {
+  localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+}
+
+function applyAliases(raw: { name: string; state: string; version: number; default: boolean; ip: string | null }[]): DistroInfo[] {
+  const aliases = loadAliases();
+  return raw.map((d) => ({
+    name: d.name,
+    alias: aliases[d.name] ?? "",
+    state: d.state,
+    version: d.version,
+    default: d.default,
+    ip: d.ip,
+  }));
+}
+
 async function refresh() {
   loading.value = true;
-  const aliases = loadAliases();
+  loadError.value = null;
   try {
     if (!isTauri) { loading.value = false; return; }
     const { listDistros } = await import("../hooks/useTauri");
     const raw = await listDistros();
-    distros.value = raw.map((d) => ({
-      name: d.name,
-      alias: aliases[d.name] ?? "",
-      state: d.state,
-      version: d.version,
-      default: d.default,
-      ip: d.ip,
-    }));
+    distros.value = applyAliases(raw);
+    saveCache(distros.value);
     log("distros.refresh", `Loaded ${distros.value.length} distros`);
   } catch (e) {
     console.error("Failed to list distros:", e);
     loadError.value = String(e);
-    distros.value = [];
+    if (!distros.value.length) distros.value = [];
   }
   loading.value = false;
 }
@@ -82,7 +102,15 @@ function stateColor(state: string) {
   return "var(--text-secondary)";
 }
 
-onMounted(refresh);
+onMounted(() => {
+  // Show cached data immediately, then refresh in background
+  const cached = loadCache();
+  if (cached.length) {
+    const aliases = loadAliases();
+    distros.value = cached.map((d) => ({ ...d, alias: aliases[d.name] ?? d.alias }));
+  }
+  refresh();
+});
 </script>
 
 <template>

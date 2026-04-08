@@ -58,6 +58,7 @@ pub fn add_rule(
     connect_port: u16,
     connect_addr: String,
     lan: bool,
+    distro: Option<String>,
 ) -> Result<Rule, String> {
     let dir = match direction.as_str() {
         "WslToWin" => Direction::WslToWin,
@@ -67,6 +68,7 @@ pub fn add_rule(
     rule.listen_addr = listen_addr;
     rule.connect_addr = connect_addr;
     rule.lan = lan;
+    rule.distro = distro;
 
     let mut cfg = config::load_rules(&config_path()).map_err(|e| e.to_string())?;
     cfg.rules.push(rule.clone());

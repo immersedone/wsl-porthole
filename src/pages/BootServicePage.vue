@@ -10,11 +10,25 @@ const { show: showToast } = useToast();
 const svcStatus = ref<"running" | "stopped" | "not_installed" | "loading">("loading");
 const installing = ref(false);
 
+const SVC_CACHE_KEY = "wsl-porthole-svc-status-cache";
+
 async function refresh() {
   if (!isTauri) { svcStatus.value = "not_installed"; return; }
-  try { const { getServiceStatus } = await import("../hooks/useTauri"); svcStatus.value = (await getServiceStatus()) as any; } catch { svcStatus.value = "not_installed"; }
+  try {
+    const { getServiceStatus } = await import("../hooks/useTauri");
+    svcStatus.value = (await getServiceStatus()) as any;
+    localStorage.setItem(SVC_CACHE_KEY, svcStatus.value);
+  } catch { svcStatus.value = "not_installed"; }
 }
-onMounted(refresh);
+
+onMounted(() => {
+  // Show cached status immediately, then refresh in background
+  const cached = localStorage.getItem(SVC_CACHE_KEY) as typeof svcStatus.value | null;
+  if (cached && ["running", "stopped", "not_installed"].includes(cached)) {
+    svcStatus.value = cached;
+  }
+  refresh();
+});
 
 async function install() {
   installing.value = true;

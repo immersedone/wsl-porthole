@@ -583,6 +583,7 @@ After running once, rules auto-update on every WSL restart forever.
 
 | Version | Date | Notes |
 |---|---|---|
+| 0.7.0 | 2026-04-08 | Fix distro persistence in add/edit/duplicate rule, cache Distros + Boot Service pages for instant load, async background refresh |
 | 0.4.0 | 2026-04-04 | UX overhaul: toast notifications, tooltips, hover states, Updates page, group editing with rule assignment, Docker engine auto-switch, distro resource stats, StatusBar enhancements, demo data removed, dropdown alignment fix |
 | 0.3.0 | 2026-04-03 | Real QR codes, settings/groups/startup persistence, custom theme editor, .wslconfig write, distro aliases, keyboard shortcuts, Docker engine toggle, duplicate tray icon fix |
 | 0.2.0 | 2026-04-03 | Hyper-V event subscription, system tray, auto-updater |

@@ -94,7 +94,7 @@ async function handleDuplicate(rule: Rule) {
       const { addRule } = await import("../hooks/useTauri");
       const lp = dup.listenPort.type === "single" ? dup.listenPort.port! : dup.listenPort.start!;
       const cp = dup.connectPort.type === "single" ? dup.connectPort.port! : dup.connectPort.start!;
-      await addRule({ name: dup.name, direction: dup.direction === "winToWsl" ? "WinToWsl" : "WslToWin", listenAddr: dup.listenAddr, listenPort: lp, connectPort: cp, connectAddr: dup.connectAddr, lan: dup.lan });
+      await addRule({ name: dup.name, direction: dup.direction === "winToWsl" ? "WinToWsl" : "WslToWin", listenAddr: dup.listenAddr, listenPort: lp, connectPort: cp, connectAddr: dup.connectAddr, lan: dup.lan, distro: dup.distro });
       refreshRules();
     } else {
       rules.value = [...rules.value, dup];
@@ -118,7 +118,7 @@ async function handleSave(partial: Partial<Rule>) {
         const { addRule } = await import("../hooks/useTauri");
         const lp = nr.listenPort.type === "single" ? nr.listenPort.port! : nr.listenPort.start!;
         const cp = nr.connectPort.type === "single" ? nr.connectPort.port! : nr.connectPort.start!;
-        await addRule({ name: nr.name, direction: nr.direction === "winToWsl" ? "WinToWsl" : "WslToWin", listenAddr: nr.listenAddr, listenPort: lp, connectPort: cp, connectAddr: nr.connectAddr, lan: nr.lan });
+        await addRule({ name: nr.name, direction: nr.direction === "winToWsl" ? "WinToWsl" : "WslToWin", listenAddr: nr.listenAddr, listenPort: lp, connectPort: cp, connectAddr: nr.connectAddr, lan: nr.lan, distro: nr.distro });
         refreshRules();
       } else {
         rules.value = [...rules.value, nr];

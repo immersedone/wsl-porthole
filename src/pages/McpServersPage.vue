@@ -32,7 +32,7 @@ async function addRoute(s: McpServerInfo) {
   try {
     if (!("__TAURI__" in window)) return;
     const { addRule } = await import("../hooks/useTauri");
-    await addRule({ name: `MCP: ${s.container_name}`, direction: "WslToWin", listenAddr: "0.0.0.0", listenPort: s.host_port, connectPort: s.port, connectAddr: "${HOST_GW}", lan: false });
+    await addRule({ name: `MCP: ${s.container_name}`, direction: "WslToWin", listenAddr: "0.0.0.0", listenPort: s.host_port, connectPort: s.port, connectAddr: "${HOST_GW}", lan: false, distro: null });
     refreshRules();
     log("mcp.add_route", `Added WSL→WIN route for ${s.container_name} on port ${s.host_port}`);
   } catch (e) { log("mcp.add_route", `Failed: ${e}`, "error"); }
