@@ -3,7 +3,9 @@ import { ref, inject, onMounted, onUnmounted, computed, watch, type Ref } from "
 import { Container, RefreshCw, Plus, AlertCircle, CheckCircle } from "lucide-vue-next";
 import type { ContainerSummary, Rule } from "../types";
 import { useAuditLog } from "../hooks/useAuditLog";
+import { useAlive } from "../hooks/useAlive";
 
+const alive = useAlive();
 const rules = inject<Ref<Rule[]>>("rules")!;
 const refreshRules = inject<() => void>("refreshRules")!;
 const { log } = useAuditLog();
@@ -17,9 +19,12 @@ async function refresh() {
   try {
     if (!("__TAURI__" in window)) { loading.value = false; return; }
     const { listDockerContainers } = await import("../hooks/useTauri");
-    containers.value = await listDockerContainers(engine.value);
+    const result = await listDockerContainers(engine.value);
+    if (!alive.value) return;
+    containers.value = result;
     log("docker.refresh", `Loaded ${containers.value.length} containers from ${engine.value} engine`);
   } catch (e: any) {
+    if (!alive.value) return;
     error.value = String(e);
     log("docker.refresh", `Failed to list containers: ${e}`, "error");
   }

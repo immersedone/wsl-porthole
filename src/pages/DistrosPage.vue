@@ -5,7 +5,9 @@ import type { Rule, StatusInfo } from "../types";
 import { isTauri } from "../lib/tauri";
 import { useAuditLog } from "../hooks/useAuditLog";
 import { useToast } from "../hooks/useToast";
+import { useAlive } from "../hooks/useAlive";
 
+const alive = useAlive();
 const rules = inject<Ref<Rule[]>>("rules")!;
 const status = inject<Ref<StatusInfo | null>>("status")!;
 const { log } = useAuditLog();
@@ -65,10 +67,12 @@ async function refresh() {
     if (!isTauri) { loading.value = false; return; }
     const { listDistros } = await import("../hooks/useTauri");
     const raw = await listDistros();
+    if (!alive.value) return;
     distros.value = applyAliases(raw);
     saveCache(distros.value);
     log("distros.refresh", `Loaded ${distros.value.length} distros`);
   } catch (e) {
+    if (!alive.value) return;
     console.error("Failed to list distros:", e);
     loadError.value = String(e);
     if (!distros.value.length) distros.value = [];

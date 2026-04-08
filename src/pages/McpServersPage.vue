@@ -3,7 +3,9 @@ import { ref, inject, onMounted, type Ref } from "vue";
 import { Radio, RefreshCw, Plus, AlertCircle, CheckCircle, Container } from "lucide-vue-next";
 import type { McpServerInfo, Rule } from "../types";
 import { useAuditLog } from "../hooks/useAuditLog";
+import { useAlive } from "../hooks/useAlive";
 
+const alive = useAlive();
 const rules = inject<Ref<Rule[]>>("rules")!;
 const refreshRules = inject<() => void>("refreshRules")!;
 const { log } = useAuditLog();
@@ -17,10 +19,13 @@ async function refresh() {
   try {
     if (!("__TAURI__" in window)) { loading.value = false; return; }
     const { detectMcpServers } = await import("../hooks/useTauri");
-    servers.value = await detectMcpServers();
+    const result = await detectMcpServers();
+    if (!alive.value) return;
+    servers.value = result;
     lastScan.value = new Date().toLocaleTimeString();
     log("mcp.scan", `Found ${servers.value.length} MCP servers`);
   } catch (e: any) {
+    if (!alive.value) return;
     error.value = String(e);
     log("mcp.scan", `Scan failed: ${e}`, "error");
   }

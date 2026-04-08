@@ -3,9 +3,11 @@ import { ref, onMounted } from "vue";
 import { Download, RefreshCw, CheckCircle, AlertCircle, Info } from "lucide-vue-next";
 import { isTauri } from "../lib/tauri";
 import { useToast } from "../hooks/useToast";
+import { useAlive } from "../hooks/useAlive";
 
 declare const __APP_VERSION__: string;
 
+const alive = useAlive();
 const { show: showToast } = useToast();
 
 const currentVersion = ref("...");
@@ -36,6 +38,7 @@ async function checkForUpdates() {
     if (isTauri) {
       const { checkForAppUpdates } = await import("../hooks/useTauri");
       const result = await checkForAppUpdates();
+      if (!alive.value) return;
       latestVersion.value = result;
     }
     lastChecked.value = new Date().toLocaleTimeString();
@@ -45,6 +48,7 @@ async function checkForUpdates() {
       showToast("You're on the latest version", "success");
     }
   } catch (e: any) {
+    if (!alive.value) return;
     error.value = `Update check failed: ${e}`;
     showToast(error.value, "error");
   }

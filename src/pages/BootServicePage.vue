@@ -4,7 +4,9 @@ import { HardDrive, Play, Square, Download, Trash2, RefreshCw } from "lucide-vue
 import { useAuditLog } from "../hooks/useAuditLog";
 import { useToast } from "../hooks/useToast";
 import { isTauri } from "../lib/tauri";
+import { useAlive } from "../hooks/useAlive";
 
+const alive = useAlive();
 const { log } = useAuditLog();
 const { show: showToast } = useToast();
 const svcStatus = ref<"running" | "stopped" | "not_installed" | "loading">("loading");
@@ -16,9 +18,11 @@ async function refresh() {
   if (!isTauri) { svcStatus.value = "not_installed"; return; }
   try {
     const { getServiceStatus } = await import("../hooks/useTauri");
-    svcStatus.value = (await getServiceStatus()) as any;
+    const result = await getServiceStatus();
+    if (!alive.value) return;
+    svcStatus.value = result as any;
     localStorage.setItem(SVC_CACHE_KEY, svcStatus.value);
-  } catch { svcStatus.value = "not_installed"; }
+  } catch { if (alive.value) svcStatus.value = "not_installed"; }
 }
 
 onMounted(() => {
@@ -73,7 +77,7 @@ async function toggleService() {
     log(`service.${action}`, `Failed: ${e}`, "error");
     showToast(`Failed to ${action} service: ${e}`, "error");
   }
-  setTimeout(refresh, 1500);
+  if (alive.value) setTimeout(refresh, 1500);
 }
 
 const statusColor = (s: string) => s === "running" ? "var(--status-ok)" : s === "stopped" ? "var(--status-warn)" : "var(--text-secondary)";

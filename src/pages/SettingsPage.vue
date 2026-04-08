@@ -2,8 +2,10 @@
 import { ref, onMounted, watch } from "vue";
 import { Info, Bug } from "lucide-vue-next";
 import { isTauri } from "../lib/tauri";
+import { useAlive } from "../hooks/useAlive";
 
 declare const __APP_VERSION__: string;
+const alive = useAlive();
 const appVersion = ref("...");
 
 const startMinimized = ref(false);
@@ -21,11 +23,14 @@ async function loadSettings() {
   if (isTauri) {
     try {
       const { getVersion } = await import("@tauri-apps/api/app");
-      appVersion.value = await getVersion();
-    } catch { appVersion.value = __APP_VERSION__; }
+      const ver = await getVersion();
+      if (!alive.value) return;
+      appVersion.value = ver;
+    } catch { if (alive.value) appVersion.value = __APP_VERSION__; }
     try {
       const { getSettings } = await import("../hooks/useTauri");
       const s = await getSettings();
+      if (!alive.value) return;
       const p = s.preferences ?? {};
       startMinimized.value = p.startMinimized ?? false;
       minimizeToTray.value = p.minimizeToTray ?? true;

@@ -3,7 +3,9 @@ import { ref, computed, onMounted } from "vue";
 import { AlertTriangle, Save, RefreshCw, RotateCcw } from "lucide-vue-next";
 import { useAuditLog } from "../hooks/useAuditLog";
 import { isTauri } from "../lib/tauri";
+import { useAlive } from "../hooks/useAlive";
 
+const alive = useAlive();
 const { log } = useAuditLog();
 
 interface Entry { key: string; value: string; description: string; section: string }
@@ -61,11 +63,12 @@ async function load() {
   if (!isTauri) { entries.value = defaultEntries; loading.value = false; return; }
   try {
     const { readWslconfig } = await import("../hooks/useTauri");
-    rawContent.value = await readWslconfig();
+    const content = await readWslconfig();
+    if (!alive.value) return;
+    rawContent.value = content;
     entries.value = parseWslconfig(rawContent.value);
-    // If file was empty or didn't exist, show defaults so user can configure
     if (!entries.value.length) entries.value = defaultEntries;
-  } catch { entries.value = defaultEntries; }
+  } catch { if (alive.value) entries.value = defaultEntries; }
   loading.value = false;
 }
 

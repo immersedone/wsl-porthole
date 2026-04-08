@@ -5,7 +5,9 @@ import type { Rule } from "../types";
 import { useAuditLog } from "../hooks/useAuditLog";
 import { useToast } from "../hooks/useToast";
 import { isTauri } from "../lib/tauri";
+import { useAlive } from "../hooks/useAlive";
 
+const alive = useAlive();
 const rules = inject<Ref<Rule[]>>("rules")!;
 const refreshRules = inject<() => void>("refreshRules")!;
 const { log } = useAuditLog();
@@ -24,6 +26,7 @@ async function loadGroups() {
     try {
       const { getSettings } = await import("../hooks/useTauri");
       const s = await getSettings();
+      if (!alive.value) return;
       groups.value = s.groups ?? [];
     } catch { /* use defaults */ }
   }

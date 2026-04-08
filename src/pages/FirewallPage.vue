@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
 import { Shield, RefreshCw } from "lucide-vue-next";
+import { useAlive } from "../hooks/useAlive";
 
+const alive = useAlive();
 const fwRules = ref<string[]>([]);
 const loading = ref(false);
 
@@ -10,9 +12,11 @@ async function refresh() {
   try {
     if (!("__TAURI__" in window)) { loading.value = false; return; }
     const { getFirewallRules } = await import("../hooks/useTauri");
-    fwRules.value = await getFirewallRules();
+    const result = await getFirewallRules();
+    if (!alive.value) return;
+    fwRules.value = result;
   } catch (e) { console.error(e); }
-  loading.value = false;
+  if (alive.value) loading.value = false;
 }
 onMounted(refresh);
 </script>

@@ -3,7 +3,9 @@ import { ref, onMounted } from "vue";
 import { Zap, Plus, Trash2, GripVertical, Play, Clock } from "lucide-vue-next";
 import { useAuditLog } from "../hooks/useAuditLog";
 import { isTauri } from "../lib/tauri";
+import { useAlive } from "../hooks/useAlive";
 
+const alive = useAlive();
 const { log } = useAuditLog();
 
 interface StartupAction { id: string; label: string; type: string; command: string; delayMs: number; enabled: boolean; target: string }
@@ -15,6 +17,7 @@ async function load() {
     try {
       const { getSettings } = await import("../hooks/useTauri");
       const s = await getSettings();
+      if (!alive.value) return;
       if (s.startupActions?.length) {
         actions.value = s.startupActions.map((a: any) => ({ ...a, type: a.actionType ?? a.type }));
         return;
